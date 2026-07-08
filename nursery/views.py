@@ -2,13 +2,17 @@ from django.shortcuts import render, redirect, get_object_or_404
 from .models import Plant, Pot, Customer, Order, OrderItem, Fertilizer
 from .forms import PlantForm, PotForm
 
+
 from django.http import HttpResponse
 
 from rest_framework.decorators import api_view
 from rest_framework.response import Response
 from drf_yasg.utils import swagger_auto_schema
-from .serializers import PlantSerializer, PotSerializer, CustomerSerializer, OrderSerializer, OrderItemSerializer, FertilizerSerializer
-
+from drf_yasg import openapi
+from .serializers import PlantSerializer, PotSerializer, CustomerSerializer, OrderSerializer, OrderItemSerializer, FertilizerSerializer, UserSerializer, LoginSerializer
+from django.contrib.auth.models import User
+from django.contrib.auth import authenticate
+from rest_framework import status
 
 def home(request):
     return HttpResponse("Welcome to Nursery Management System")
@@ -50,6 +54,11 @@ def delete_plant(request, id):
     plant.delete()
     return redirect('plant_list')
 
+@swagger_auto_schema(
+    method='get',
+    tags=['plant']
+)
+
 @api_view(['GET'])
 def get_plants(request):
 
@@ -66,9 +75,9 @@ def get_plants(request):
 
 @swagger_auto_schema(
     method='post',
-    request_body=PlantSerializer
+    request_body=PlantSerializer,
+    tags=['plant']
 )
-
 @api_view(['POST'])
 def add_plant_api(request):
 
@@ -92,6 +101,11 @@ def add_plant_api(request):
     "errors": serializer.errors
 })
 
+@swagger_auto_schema(
+    method='put',
+    request_body=PlantSerializer,
+    tags=['plant']
+)
 @api_view(['PUT'])
 def update_plant_api(request, id):
 
@@ -120,6 +134,10 @@ def update_plant_api(request, id):
         "errors": serializer.errors
     })
 
+@swagger_auto_schema(
+    method='delete',
+    tags=['plant']
+)
 @api_view(['DELETE'])
 def delete_plant_api(request, id):
 
@@ -556,3 +574,44 @@ class FertilizerDetailView(APIView):
             "status": "success",
             "message": "Deleted successfully"
         })
+    
+from rest_framework.views import APIView
+
+class UserView(APIView):
+
+    def get(self, request):
+        users = User.objects.all()
+        serializer = UserSerializer(users, many=True)
+
+        return Response({
+            "status": "success",
+            "code": 200,
+            "message": "All users fetched successfully",
+            "data": serializer.data
+        })
+    
+@swagger_auto_schema(
+    method='post',
+    request_body=LoginSerializer
+)
+@api_view(['POST'])
+def login_api(request):
+
+    username = request.data.get("username")
+    password = request.data.get("password")
+
+    user = authenticate(username=username, password=password)
+
+    if user is not None:
+        return Response({
+            "status": "success",
+            "code": 200,
+            "message": "Login successful",
+            "username": user.username
+        })
+
+    return Response({
+        "status": "failed",
+        "code": 401,
+        "message": "Invalid username or password"
+    }, status=status.HTTP_401_UNAUTHORIZED)

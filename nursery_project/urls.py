@@ -49,33 +49,36 @@ urlpatterns = [
     # ❌ Delete plant (MISSING FIX)
     path('delete/<int:id>/', delete_plant, name='delete_plant'),
 
-    path('api/plants/', views.get_plants),
-    path('api/addplant/', views.add_plant_api),
-    path('api/updateplant/<int:id>/', views.update_plant_api),
-    path('api/deleteplant/<int:id>/', views.delete_plant_api),
+    path('api/plant/allPlants/', views.get_plants),
+    path('api/plant/addPlant/', views.add_plant_api),
+    path('api/plant/updatePlant/<int:id>/', views.update_plant_api),
+    path('api/plant/deletePlant/<int:id>/', views.delete_plant_api),
 
-    path('api/pots/', views.get_pots),
-    path('api/addpot/', views.add_pot_api),
-    path('api/updatepot/<int:id>/', views.update_pot_api),
-    path('api/deletepot/<int:id>/', views.delete_pot_api),
+    path('api/pot/allPots/', views.get_pots),
+    path('api/pot/addPot/', views.add_pot_api),
+    path('api/pot/updatePot/<int:id>/', views.update_pot_api),
+    path('api/pot/deletePot/<int:id>/', views.delete_pot_api),
 
-    path('api/customers/', views.get_customers),
-    path('api/addcustomer/', views.add_customer_api),
-    path('api/updatecustomer/<int:id>/', views.update_customer_api),
-    path('api/deletecustomer/<int:id>/', views.delete_customer_api),
+    path('api/customer/allCustomers/', views.get_customers),
+    path('api/customer/addCustomer/', views.add_customer_api),
+    path('api/customer/updateCustomer/<int:id>/', views.update_customer_api),
+    path('api/customer/deleteCustomer/<int:id>/', views.delete_customer_api),
 
-    path('api/orders/', views.get_orders),
-    path('api/addorder/', views.add_order_api),
-    path('api/updateorder/<int:id>/', views.update_order_api),
-    path('api/deleteorder/<int:id>/', views.delete_order_api),
+    path('api/order/allOrders/', views.get_orders),
+    path('api/order/addOrder/', views.add_order_api),
+    path('api/order/updateOrder/<int:id>/', views.update_order_api),
+    path('api/order/deleteOrder/<int:id>/', views.delete_order_api),
 
-    path('api/orderitems/', views.get_order_items),
-    path('api/addorderitem/', views.add_order_item_api),
-    path('api/updateorderitem/<int:id>/', views.update_order_item_api),
-    path('api/deleteorderitem/<int:id>/', views.delete_order_item_api),
+    path('api/orderitem/allOrderItems/', views.get_order_items),
+    path('api/orderitem/addOrderItem/', views.add_order_item_api),
+    path('api/orderitem/updateOrderItem/<int:id>/', views.update_order_item_api),
+    path('api/orderitem/deleteOrderItem/<int:id>/', views.delete_order_item_api),
 
-    path('api/fertilizers/', FertilizerView.as_view()),
-    path('api/fertilizers/<int:id>/', FertilizerDetailView.as_view()),
+    path('api/fertilizer/allFertilizers/', FertilizerView.as_view()),
+    path('api/fertilizer/updateFertilizer/<int:id>/', FertilizerDetailView.as_view()),
+
+    path('api/user/allUsers/', views.UserView.as_view()),
+    path('api/user/login/', views.login_api),
 
     path(
     'swagger/',
