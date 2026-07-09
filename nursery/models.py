@@ -14,6 +14,9 @@ class Plant(models.Model):
 class Customer(models.Model):
     name = models.CharField(max_length=100)
     phone = models.CharField(max_length=15)
+    email = models.EmailField(blank=True, null=True)
+    password = models.CharField(max_length=100, blank=True, null=True)
+    role = models.CharField(max_length=20, default="Customer")
 
     def __str__(self):
         return self.name
