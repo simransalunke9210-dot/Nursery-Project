@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import Plant, Pot, Customer, Order, OrderItem, Fertilizer
+from .models import Plant, Pot, Customer, Order, OrderItem, Fertilizer, Admin, UserProfile
 from django.contrib.auth.models import User
 
 class PlantSerializer(serializers.ModelSerializer):
@@ -33,11 +33,46 @@ class FertilizerSerializer(serializers.ModelSerializer):
         model = Fertilizer
         fields = "__all__"    
 
+class AdminSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Admin
+        fields = "__all__"
+
+class AdminLoginSerializer(serializers.Serializer):
+    email = serializers.EmailField()
+    password = serializers.CharField()
+    role = serializers.CharField()
+
 class UserSerializer(serializers.ModelSerializer):
+    mobile = serializers.CharField(write_only=True)
+    role = serializers.CharField(write_only=True)
+
     class Meta:
         model = User
-        fields = ["id", "username", "first_name", "last_name", "email"] 
+        fields = [
+            'id',
+            'username',
+            'first_name',
+            'last_name',
+            'email',
+            'password',
+            'mobile',
+            'role'
+        ]
+        extra_kwargs = {
+            'password': {'write_only': True}
+        }
 
-class LoginSerializer(serializers.Serializer):
-    username = serializers.CharField()
-    password = serializers.CharField()
+    def create(self, validated_data):
+        mobile = validated_data.pop('mobile')
+        role = validated_data.pop('role')
+
+        user = User.objects.create_user(**validated_data)
+
+        UserProfile.objects.create(
+            user=user,
+            mobile=mobile,
+            role=role
+        )
+
+        return user

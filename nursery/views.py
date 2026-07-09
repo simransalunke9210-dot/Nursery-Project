@@ -1,15 +1,16 @@
 from django.shortcuts import render, redirect, get_object_or_404
-from .models import Plant, Pot, Customer, Order, OrderItem, Fertilizer
+from .models import Plant, Pot, Customer, Order, OrderItem, Fertilizer, Admin
 from .forms import PlantForm, PotForm
 
 
 from django.http import HttpResponse
 
-from rest_framework.decorators import api_view
-from rest_framework.response import Response
+from rest_framework.decorators import api_view, parser_classes
+from rest_framework.parsers import MultiPartParser, FormParser
+from rest_framework.response import Response 
 from drf_yasg.utils import swagger_auto_schema
 from drf_yasg import openapi
-from .serializers import PlantSerializer, PotSerializer, CustomerSerializer, OrderSerializer, OrderItemSerializer, FertilizerSerializer, UserSerializer, LoginSerializer
+from .serializers import PlantSerializer, PotSerializer, CustomerSerializer, OrderSerializer, OrderItemSerializer, FertilizerSerializer, UserSerializer, AdminSerializer, AdminLoginSerializer
 from django.contrib.auth.models import User
 from django.contrib.auth import authenticate
 from rest_framework import status
@@ -79,6 +80,7 @@ def get_plants(request):
     tags=['plant']
 )
 @api_view(['POST'])
+@parser_classes([MultiPartParser, FormParser])
 def add_plant_api(request):
 
     serializer = PlantSerializer(data=request.data)
@@ -509,7 +511,7 @@ def delete_order_item_api(request, id):
     })
 
 from rest_framework.views import APIView
-from rest_framework.response import Response
+# from rest_framework.response import Response
 from .models import Fertilizer
 from .serializers import FertilizerSerializer
 
@@ -575,6 +577,85 @@ class FertilizerDetailView(APIView):
             "message": "Deleted successfully"
         })
     
+class AdminView(APIView):
+
+    @swagger_auto_schema(
+        tags=['admins']
+    )
+    def get(self, request):
+        admins = Admin.objects.all()
+        serializer = AdminSerializer(admins, many=True)
+
+        return Response({
+            "status": "success",
+            "code": 200,
+            "message": "All admins fetched successfully",
+            "data": serializer.data
+        })
+
+    @swagger_auto_schema(
+        request_body=AdminSerializer,
+        tags=['admins']
+    )
+    def post(self, request):
+        serializer = AdminSerializer(data=request.data)
+
+        if serializer.is_valid():
+            serializer.save()
+
+            return Response({
+                "status": "success",
+                "code": 201,
+                "message": "Admin added successfully",
+                "data": serializer.data
+            })
+
+        return Response({
+            "status": "failed",
+            "code": 400,
+            "errors": serializer.errors
+        })
+    
+
+class AdminDetailView(APIView):
+
+    @swagger_auto_schema(
+        request_body=AdminSerializer,
+        tags=['admins']
+    )
+    def put(self, request, id):
+        admin = get_object_or_404(Admin, id=id)
+        serializer = AdminSerializer(admin, data=request.data)
+
+        if serializer.is_valid():
+            serializer.save()
+
+            return Response({
+                "status": "success",
+                "code": 200,
+                "message": "Admin updated successfully",
+                "data": serializer.data
+            })
+
+        return Response({
+            "status": "failed",
+            "code": 400,
+            "errors": serializer.errors
+        })
+
+    @swagger_auto_schema(
+        tags=['admins']
+    )
+    def delete(self, request, id):
+        admin = get_object_or_404(Admin, id=id)
+        admin.delete()
+
+        return Response({
+            "status": "success",
+            "code": 200,
+            "message": "Admin deleted successfully"
+        })
+    
 from rest_framework.views import APIView
 
 class UserView(APIView):
@@ -592,10 +673,83 @@ class UserView(APIView):
     
 @swagger_auto_schema(
     method='post',
-    request_body=LoginSerializer
+    request_body=AdminLoginSerializer,
+    tags=['admins']
 )
+
 @api_view(['POST'])
 def login_api(request):
+
+    email = request.data.get("email")
+    password = request.data.get("password")
+    role = request.data.get("role")
+
+    admin = Admin.objects.filter(
+        email=email,
+        password=password,
+        role=role
+    ).first()
+
+    if admin:
+        return Response({
+            "status": "success",
+            "code": 200,
+            "message": "Admin Login Successful",
+            "data": {
+                "id": admin.id,
+                "name": admin.name,
+                "email": admin.email,
+                "mobile": admin.mobile,
+                "role": admin.role
+            }
+        })
+
+    return Response({
+        "status": "failed",
+        "code": 401,
+        "message": "Invalid Email, Password or Role"
+    }, status=status.HTTP_401_UNAUTHORIZED)
+
+@swagger_auto_schema(
+    method='post',
+    request_body=UserSerializer,
+    tags=['users']
+)
+@api_view(['POST'])
+def register_user(request):
+
+    serializer = UserSerializer(data=request.data)
+
+    if serializer.is_valid():
+        serializer.save()
+
+        return Response({
+            "status": "success",
+            "code": 201,
+            "message": "User registered successfully",
+            "data": serializer.data
+        })
+
+    return Response({
+        "status": "failed",
+        "code": 400,
+        "errors": serializer.errors
+    })
+
+@swagger_auto_schema(
+    method='post',
+    request_body=openapi.Schema(
+        type=openapi.TYPE_OBJECT,
+        required=['username', 'password'],
+        properties={
+            'username': openapi.Schema(type=openapi.TYPE_STRING),
+            'password': openapi.Schema(type=openapi.TYPE_STRING),
+        },
+    ),
+    tags=['users']
+)
+@api_view(['POST'])
+def user_login(request):
 
     username = request.data.get("username")
     password = request.data.get("password")
@@ -606,12 +760,19 @@ def login_api(request):
         return Response({
             "status": "success",
             "code": 200,
-            "message": "Login successful",
-            "username": user.username
+            "message": "User Login Successful",
+            "data": {
+                "id": user.id,
+                "username": user.username,
+                "email": user.email,
+                "first_name": user.first_name,
+                "last_name": user.last_name
+            }
         })
 
     return Response({
         "status": "failed",
         "code": 401,
-        "message": "Invalid username or password"
+        "message": "Invalid Username or Password"
     }, status=status.HTTP_401_UNAUTHORIZED)
+

@@ -1,7 +1,9 @@
 from django.contrib import admin
 from django.urls import path
 from nursery import views
-from nursery.views import FertilizerView, FertilizerDetailView
+from django.conf import settings
+from django.conf.urls.static import static
+from nursery.views import FertilizerView, FertilizerDetailView, AdminView, AdminDetailView
 from nursery.views import (
     add_plant,
     plant_list,
@@ -77,8 +79,13 @@ urlpatterns = [
     path('api/fertilizer/allFertilizers/', FertilizerView.as_view()),
     path('api/fertilizer/updateFertilizer/<int:id>/', FertilizerDetailView.as_view()),
 
-    path('api/user/allUsers/', views.UserView.as_view()),
-    path('api/user/login/', views.login_api),
+    path('api/admins/', AdminView.as_view()),
+    path('api/admins/<int:id>/', AdminDetailView.as_view()),
+    path('api/admins/login/', views.login_api),
+
+    path('api/users/', views.UserView.as_view()),
+    path('api/users/register/', views.register_user),
+    path('api/users/login/', views.user_login),
 
     path(
     'swagger/',
@@ -92,3 +99,6 @@ path(
 ),
     
 ]
+
+if settings.DEBUG:
+    urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)

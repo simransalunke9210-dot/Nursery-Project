@@ -4,7 +4,7 @@ from .models import Plant, Pot
 class PlantForm(forms.ModelForm):
     class Meta:
         model = Plant
-        fields = ['name', 'category', 'price', 'quantity']
+        fields = ['name', 'category', 'price', 'quantity', 'image']
 
 
 class PotForm(forms.ModelForm):
