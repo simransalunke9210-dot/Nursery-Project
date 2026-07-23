@@ -2,6 +2,8 @@ from django.shortcuts import render, redirect, get_object_or_404
 from .models import Plant, Pot, Customer, Order, OrderItem, Fertilizer, Admin
 from .forms import PlantForm, PotForm
 
+from django.contrib.auth import authenticate
+from .models import UserProfile
 
 from django.http import HttpResponse
 
@@ -12,7 +14,6 @@ from drf_yasg.utils import swagger_auto_schema
 from drf_yasg import openapi
 from .serializers import PlantSerializer, PotSerializer, CustomerSerializer, OrderSerializer, OrderItemSerializer, FertilizerSerializer, UserSerializer, AdminSerializer, AdminLoginSerializer
 from django.contrib.auth.models import User
-from django.contrib.auth import authenticate
 from rest_framework import status
 
 def home(request):
@@ -673,45 +674,6 @@ class UserView(APIView):
     
 @swagger_auto_schema(
     method='post',
-    request_body=AdminLoginSerializer,
-    tags=['admins']
-)
-
-@api_view(['POST'])
-def login_api(request):
-
-    email = request.data.get("email")
-    password = request.data.get("password")
-    role = request.data.get("role")
-
-    admin = Admin.objects.filter(
-        email=email,
-        password=password,
-        role=role
-    ).first()
-
-    if admin:
-        return Response({
-            "status": "success",
-            "code": 200,
-            "message": "Admin Login Successful",
-            "data": {
-                "id": admin.id,
-                "name": admin.name,
-                "email": admin.email,
-                "mobile": admin.mobile,
-                "role": admin.role
-            }
-        })
-
-    return Response({
-        "status": "failed",
-        "code": 401,
-        "message": "Invalid Email, Password or Role"
-    }, status=status.HTTP_401_UNAUTHORIZED)
-
-@swagger_auto_schema(
-    method='post',
     request_body=UserSerializer,
     tags=['users']
 )
@@ -721,7 +683,14 @@ def register_user(request):
     serializer = UserSerializer(data=request.data)
 
     if serializer.is_valid():
-        serializer.save()
+
+        user = serializer.save()
+
+        UserProfile.objects.create(
+            user=user,
+            mobile=request.data.get("mobile"),
+            role=request.data.get("role")
+        )
 
         return Response({
             "status": "success",
@@ -737,42 +706,120 @@ def register_user(request):
     })
 
 @swagger_auto_schema(
+    method='put',
+    request_body=UserSerializer,
+    tags=['users']
+)
+@api_view(['PUT'])
+def update_user(request, id):
+
+    user = get_object_or_404(User, id=id)
+
+    serializer = UserSerializer(user, data=request.data, partial=True)
+
+    if serializer.is_valid():
+        serializer.save()
+
+        profile = UserProfile.objects.get(user=user)
+        profile.mobile = request.data.get("mobile", profile.mobile)
+        profile.role = request.data.get("role", profile.role)
+        profile.save()
+
+        return Response({
+            "status": "success",
+            "message": "User updated successfully",
+            "data": serializer.data
+        })
+
+    return Response({
+        "status": "failed",
+        "errors": serializer.errors
+    }, status=400)
+
+
+@api_view(['DELETE'])
+def delete_user(request, id):
+
+    user = get_object_or_404(User, id=id)
+    user.delete()
+
+    return Response({
+        "status": "success",
+        "message": "User deleted successfully"
+    })
+
+@swagger_auto_schema(
     method='post',
     request_body=openapi.Schema(
         type=openapi.TYPE_OBJECT,
-        required=['username', 'password'],
+        required=['email', 'password'],
         properties={
-            'username': openapi.Schema(type=openapi.TYPE_STRING),
+            'email': openapi.Schema(type=openapi.TYPE_STRING),
             'password': openapi.Schema(type=openapi.TYPE_STRING),
         },
     ),
-    tags=['users']
+    tags=['Login']
 )
-@api_view(['POST'])
-def user_login(request):
 
-    username = request.data.get("username")
+@api_view(['POST'])
+def login(request):
+
+    email = request.data.get("email")
     password = request.data.get("password")
 
-    user = authenticate(username=username, password=password)
+    # Check Admin table first
+    try:
+        admin = Admin.objects.get(email=email, password=password)
 
-    if user is not None:
         return Response({
             "status": "success",
-            "code": 200,
+            "message": "Admin Login Successful",
+            "data": {
+                "id": admin.id,
+                "name": admin.name,
+                "email": admin.email,
+                "mobile": admin.mobile,
+                "role": "Admin"
+            }
+        })
+
+    except Admin.DoesNotExist:
+        pass
+
+    # Check User table
+    try:
+        user = User.objects.get(email=email)
+    except User.DoesNotExist:
+        return Response({
+            "status": "failed",
+            "message": "Invalid Email or Password"
+        }, status=401)
+
+    user = authenticate(username=user.username, password=password)
+
+    if user:
+        profile = UserProfile.objects.get(user=user)
+
+        return Response({
+            "status": "success",
             "message": "User Login Successful",
             "data": {
                 "id": user.id,
                 "username": user.username,
                 "email": user.email,
-                "first_name": user.first_name,
-                "last_name": user.last_name
+                "mobile": profile.mobile,
+                "role": profile.role
             }
         })
 
     return Response({
         "status": "failed",
-        "code": 401,
-        "message": "Invalid Username or Password"
-    }, status=status.HTTP_401_UNAUTHORIZED)
+        "message": "Invalid Email or Password"
+    }, status=401)
+
+    return Response({
+        "status": "failed",
+        "code": 400,
+        "errors": serializer.errors
+    })
 

@@ -81,11 +81,13 @@ urlpatterns = [
 
     path('api/admins/', AdminView.as_view()),
     path('api/admins/<int:id>/', AdminDetailView.as_view()),
-    path('api/admins/login/', views.login_api),
 
     path('api/users/', views.UserView.as_view()),
     path('api/users/register/', views.register_user),
-    path('api/users/login/', views.user_login),
+    path('api/users/update/<int:id>/', views.update_user),
+    path('api/users/delete/<int:id>/', views.delete_user),
+    
+    path('api/login/', views.login),
 
     path(
     'swagger/',
