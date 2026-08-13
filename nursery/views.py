@@ -684,13 +684,7 @@ def register_user(request):
 
     if serializer.is_valid():
 
-        user = serializer.save()
-
-        UserProfile.objects.create(
-            user=user,
-            mobile=request.data.get("mobile"),
-            role=request.data.get("role")
-        )
+        serializer.save()
 
         return Response({
             "status": "success",
