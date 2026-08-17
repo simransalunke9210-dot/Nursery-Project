@@ -99,6 +99,13 @@ def get_plants(request):
             required=True
         ),
         openapi.Parameter(
+            'description',
+            openapi.IN_FORM,
+            description='Plant description',
+            type=openapi.TYPE_STRING,
+            required=False
+        ),
+        openapi.Parameter(
             'price',
             openapi.IN_FORM,
             description='Plant price',
@@ -143,13 +150,12 @@ def add_plant_api(request):
 
     # Get plant data
     plant_data = {
-        'name': request.data.get('name'),
-        'category': request.data.get('category'),
-        'price': request.data.get('price'),
-        'quantity': request.data.get('quantity'),
-        'description': request.data.get('description'),
-        
-    }
+    'name': request.data.get('name'),
+    'category': request.data.get('category'),
+    'description': request.data.get('description'),
+    'price': request.data.get('price'),
+    'quantity': request.data.get('quantity'),
+}
 
     # Create plant
     plant_serializer = PlantSerializer(
@@ -232,9 +238,9 @@ def add_plant_api(request):
             "id": plant.id,
             "name": plant.name,
             "category": plant.category,
+            "description": plant.description,
             "price": plant.price,
             "quantity": plant.quantity,
-            "description": plant.description,
             "images": image_urls
         }
     }, status=status.HTTP_201_CREATED)
@@ -323,6 +329,11 @@ def delete_pot(request, id):
     pot.delete()
     return redirect('pot_list')
 
+@swagger_auto_schema(
+    method='get',
+    tags=['Pots'],
+
+)
 @api_view(['GET'])
 def get_pots(request):
 
@@ -367,6 +378,11 @@ def add_pot_api(request):
         "errors": serializer.errors
     })
 
+@swagger_auto_schema(
+    method='put',
+    tags=['Pots'],
+)
+
 @api_view(['PUT'])
 def update_pot_api(request, id):
 
@@ -394,6 +410,10 @@ def update_pot_api(request, id):
         "code": 400,
         "errors": serializer.errors
     })
+
+@swagger_auto_schema(
+    method='delete',
+    tags=['Pots'])
 
 @api_view(['DELETE'])
 def delete_pot_api(request, id):

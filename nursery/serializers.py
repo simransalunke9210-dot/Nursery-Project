@@ -8,7 +8,14 @@ class PlantSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Plant
-        fields = '__all__'
+        fields = [
+            'id',
+            'name',
+            'category',
+            'description',
+            'price',
+            'quantity'
+        ]
 
     def to_representation(self, instance):
         data = super().to_representation(instance)
