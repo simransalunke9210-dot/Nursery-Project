@@ -8,6 +8,7 @@ class Plant(models.Model):
     category = models.CharField(max_length=50)
     price = models.FloatField()
     quantity = models.IntegerField()
+    description = models.TextField(blank=True, null=True)
     image = models.ImageField(upload_to='plants/', null=True, blank=True)
 
     def __str__(self):

@@ -147,6 +147,8 @@ def add_plant_api(request):
         'category': request.data.get('category'),
         'price': request.data.get('price'),
         'quantity': request.data.get('quantity'),
+        'description': request.data.get('description'),
+        
     }
 
     # Create plant
@@ -232,6 +234,7 @@ def add_plant_api(request):
             "category": plant.category,
             "price": plant.price,
             "quantity": plant.quantity,
+            "description": plant.description,
             "images": image_urls
         }
     }, status=status.HTTP_201_CREATED)
@@ -1946,3 +1949,4 @@ def rate_order_api(request, order_id):
         "rating": rating,
         "review": review
     })
+
