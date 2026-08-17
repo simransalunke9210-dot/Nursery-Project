@@ -54,8 +54,8 @@ urlpatterns = [
     path('api/updatepot/<int:id>/', views.update_pot_api),
     path('api/deletepot/<int:id>/', views.delete_pot_api),
 
+
     path('swagger/', schema_view.with_ui('swagger', cache_timeout=0), name='swagger-ui'),
-    path('cart/add/', views.add_to_cart, name='add_to_cart'),
-    path('cart/', views.view_cart, name='view_cart'),
+
     
 ]

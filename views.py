@@ -1,5 +1,5 @@
 from django.shortcuts import render, redirect, get_object_or_404
-from .models import Plant
+from .models import Plant, Pot, Fertilizer, Cart, CartItem
 from .forms import PlantForm
 from django.http import HttpResponse
 
@@ -9,9 +9,9 @@ from .serializers import PlantSerializer
 
 from rest_framework import status
 from django.contrib.auth.models import User
-
-from .models import Cart, CartItem, Plant
+from rest_framework.decorators import api_view
 from .serializers import CartSerializer
+from rest_framework import status
 
 def home(request):
     return HttpResponse("Welcome to Nursery Management System")
@@ -144,110 +144,5 @@ def delete_plant_api(request, id):
 #         "message": "Plant deleted successfully"
 #     })
 
-@api_view(['POST'])
-def add_to_cart(request):
 
-    user_id = request.data.get('user_id')
-    plant_id = request.data.get('plant_id')
-    quantity = request.data.get('quantity', 1)
 
-    if not user_id:
-        return Response({
-            "status": "failed",
-            "message": "user_id is required"
-        }, status=status.HTTP_400_BAD_REQUEST)
-
-    if not plant_id:
-        return Response({
-            "status": "failed",
-            "message": "plant_id is required"
-        }, status=status.HTTP_400_BAD_REQUEST)
-
-    try:
-        user = User.objects.get(id=user_id)
-    except User.DoesNotExist:
-        return Response({
-            "status": "failed",
-            "message": "User not found"
-        }, status=status.HTTP_404_NOT_FOUND)
-
-    try:
-        plant = Plant.objects.get(id=plant_id)
-    except Plant.DoesNotExist:
-        return Response({
-            "status": "failed",
-            "message": "Plant not found"
-        }, status=status.HTTP_404_NOT_FOUND)
-
-    try:
-        quantity = int(quantity)
-    except (TypeError, ValueError):
-        return Response({
-            "status": "failed",
-            "message": "Quantity must be a number"
-        }, status=status.HTTP_400_BAD_REQUEST)
-
-    if quantity <= 0:
-        return Response({
-            "status": "failed",
-            "message": "Quantity must be greater than 0"
-        }, status=status.HTTP_400_BAD_REQUEST)
-
-    if quantity > plant.quantity:
-        return Response({
-            "status": "failed",
-            "message": "Requested quantity is not available"
-        }, status=status.HTTP_400_BAD_REQUEST)
-
-    cart, created = Cart.objects.get_or_create(user=user)
-
-    cart_item, item_created = CartItem.objects.get_or_create(
-        cart=cart,
-        plant=plant,
-        defaults={'quantity': quantity}
-    )
-
-    if not item_created:
-        new_quantity = cart_item.quantity + quantity
-
-        if new_quantity > plant.quantity:
-            return Response({
-                "status": "failed",
-                "message": "Requested quantity is not available"
-            }, status=status.HTTP_400_BAD_REQUEST)
-
-        cart_item.quantity = new_quantity
-        cart_item.save()
-
-    return Response({
-        "status": "success",
-        "message": "Plant added to cart successfully",
-        "data": CartSerializer(cart).data
-    }, status=status.HTTP_200_OK)
-
-@api_view(['GET'])
-def view_cart(request):
-
-    user_id = request.query_params.get('user_id')
-
-    if not user_id:
-        return Response({
-            "status": "failed",
-            "message": "user_id is required"
-        }, status=status.HTTP_400_BAD_REQUEST)
-
-    try:
-        user = User.objects.get(id=user_id)
-    except User.DoesNotExist:
-        return Response({
-            "status": "failed",
-            "message": "User not found"
-        }, status=status.HTTP_404_NOT_FOUND)
-
-    cart, created = Cart.objects.get_or_create(user=user)
-
-    return Response({
-        "status": "success",
-        "message": "Cart fetched successfully",
-        "data": CartSerializer(cart).data
-    }, status=status.HTTP_200_OK)

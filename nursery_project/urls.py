@@ -1,5 +1,5 @@
 from django.contrib import admin
-from django.urls import path
+from django.urls import path,include
 from nursery import views
 from django.conf import settings
 from django.conf.urls.static import static
@@ -15,11 +15,19 @@ from nursery.views import (
     pot_list,
     edit_pot,
     delete_pot,
+    track_order_api,
+    download_invoice_api,
+    order_again_api,
+    cancel_order_api,
+    rate_order_api,
 )
+
 
 from rest_framework import permissions
 from drf_yasg.views import get_schema_view
 from drf_yasg import openapi
+from django.conf import settings
+from django.conf.urls.static import static
 
 schema_view = get_schema_view(
    openapi.Info(
@@ -88,19 +96,25 @@ urlpatterns = [
     path('api/users/delete/<int:id>/', views.delete_user),
     
     path('api/login/', views.login),
-
-    path(
-    'swagger/',
-    schema_view.with_ui('swagger', cache_timeout=0),
-    name='schema-swagger-ui'
-),
-path(
-    'redoc/',
-    schema_view.with_ui('redoc', cache_timeout=0),
-    name='schema-redoc'
-),
+    path('api/cart/add/', views.add_to_cart, name='add_to_cart'),
+    path('api/cart/', views.view_cart, name='view_cart'),
+    path('api/wishlist/add/', views.add_to_wishlist, name='add_to_wishlist'),
+    path('api/wishlist/', views.view_wishlist, name='view_wishlist'),
+    path('api/wishlist/remove/',views.remove_from_wishlist,name='remove_from_wishlist'),
+    path('api/cart/remove/',views.remove_from_cart,name='remove_from_cart'),
+    path('api/cart/update/',views.update_cart_quantity,name='update_cart_quantity'),
+    path('orders/<int:order_id>/track/',views.track_order_api,name='track-order'),
+    path('orders/<int:order_id>/invoice/',views.download_invoice_api,name='download-invoice'),
+    path('orders/<int:order_id>/order-again/',views.order_again_api,name='order-again'),
+    path('orders/<int:order_id>/cancel/',views.cancel_order_api,name='cancel-order'),
+    path('orders/<int:order_id>/rating/',views.rate_order_api,name='rate-order'
+         ),
+    path('swagger/',schema_view.with_ui('swagger', cache_timeout=0),name='schema-swagger-ui'),
+    path('redoc/',schema_view.with_ui('redoc', cache_timeout=0),name='schema-redoc'),
     
 ]
 
 if settings.DEBUG:
     urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
+
+urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
