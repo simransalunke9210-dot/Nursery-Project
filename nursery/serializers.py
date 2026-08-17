@@ -3,8 +3,34 @@ from .models import Plant, Pot, Customer, Order, OrderItem, Fertilizer, Admin, U
 from django.contrib.auth.models import User
 from .models import PlantImage
 
+class PlantImageSerializer(serializers.ModelSerializer):
+
+    class Meta:
+        model = PlantImage
+        fields = ['id', 'image']
+
+    def to_representation(self, instance):
+        data = super().to_representation(instance)
+
+        request = self.context.get('request')
+
+        if instance.image:
+            if request:
+                data['image'] = request.build_absolute_uri(
+                    instance.image.url
+                )
+            else:
+                data['image'] = instance.image.url
+
+        return data
 
 class PlantSerializer(serializers.ModelSerializer):
+
+    images = PlantImageSerializer(
+        source='plant_images',
+        many=True,
+        read_only=True
+    )
 
     class Meta:
         model = Plant
@@ -14,24 +40,9 @@ class PlantSerializer(serializers.ModelSerializer):
             'category',
             'description',
             'price',
-            'quantity'
+            'quantity',
+            'images'
         ]
-
-    def to_representation(self, instance):
-        data = super().to_representation(instance)
-
-        request = self.context.get('request')
-
-        if instance.image:
-            if request:
-                data['image'] = request.build_absolute_uri(instance.image.url)
-            else:
-                data['image'] = instance.image.url
-        else:
-            data['image'] = None
-
-        return data
-
 class PotSerializer(serializers.ModelSerializer):
     class Meta:
         model = Pot
@@ -111,26 +122,6 @@ class AddToCartSerializer(serializers.Serializer):
     plant_id = serializers.IntegerField()
     quantity = serializers.IntegerField(default=1)
 
-class PlantImageSerializer(serializers.ModelSerializer):
-
-    class Meta:
-        model = PlantImage
-        fields = ['id', 'image']
-
-    def to_representation(self, instance):
-        data = super().to_representation(instance)
-
-        request = self.context.get('request')
-
-        if instance.image:
-            if request:
-                data['image'] = request.build_absolute_uri(
-                    instance.image.url
-                )
-            else:
-                data['image'] = instance.image.url
-
-        return data
 
 class OrderItemSerializer(serializers.ModelSerializer):
 
