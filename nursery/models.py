@@ -230,3 +230,38 @@ class OrderRating(models.Model):
 
     def __str__(self):
         return f"Rating for Order {self.order.id}"
+
+
+class Settings(models.Model):
+    # Website Information
+    website_name = models.CharField(max_length=200, default="Nursery")
+    phone = models.CharField(max_length=20, blank=True, null=True)
+    email = models.EmailField(blank=True, null=True)
+    address = models.TextField(blank=True, null=True)
+
+    # Logo
+    logo = models.ImageField(
+        upload_to='settings/',
+        blank=True,
+        null=True
+    )
+
+    # Store Settings
+    delivery_charge = models.FloatField(default=0)
+    free_delivery_above = models.FloatField(default=0)
+    currency = models.CharField(max_length=10, default="INR")
+
+    # Admin Settings
+    admin_name = models.CharField(max_length=100, blank=True, null=True)
+    new_password = models.CharField(max_length=255, blank=True, null=True)
+
+    # Social Media
+    facebook_url = models.URLField(blank=True, null=True)
+    instagram_url = models.URLField(blank=True, null=True)
+    contact_phone = models.CharField(max_length=20, blank=True, null=True)
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return self.website_name

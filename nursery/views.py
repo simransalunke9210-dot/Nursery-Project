@@ -1,5 +1,5 @@
 from django.shortcuts import render, redirect, get_object_or_404
-from .models import Plant, Pot, Customer, Order, OrderItem, Fertilizer, Admin, PlantImage,OrderRating
+from .models import Plant, Pot, Customer, Order, OrderItem, Fertilizer, Admin, PlantImage,OrderRating,Settings
 from .forms import PlantForm, PotForm
 
 from django.contrib.auth import authenticate
@@ -12,13 +12,14 @@ from rest_framework.parsers import MultiPartParser, FormParser
 from rest_framework.response import Response 
 from drf_yasg.utils import swagger_auto_schema
 from drf_yasg import openapi
-from .serializers import PlantSerializer, PotSerializer, CustomerSerializer, OrderSerializer, OrderItemSerializer, FertilizerSerializer, UserSerializer, AdminSerializer, AdminLoginSerializer
+from .serializers import PlantSerializer, PotSerializer, CustomerSerializer, OrderSerializer, OrderItemSerializer, FertilizerSerializer, UserSerializer, AdminSerializer, AdminLoginSerializer,ReportSerializer,SettingsSerializer
 from django.contrib.auth.models import User
 from rest_framework import status
 from django.utils import timezone
 from datetime import timedelta
 from rest_framework.decorators import api_view
 from reportlab.pdfgen import canvas
+from django.db.models import Sum, Count, Avg
 
 def home(request):
     return HttpResponse("Welcome to Nursery Management System")
@@ -1970,3 +1971,126 @@ def rate_order_api(request, order_id):
         "review": review
     })
 
+class ReportsView(APIView):
+
+    @swagger_auto_schema(
+        tags=['reports']
+    )
+    def get(self, request):
+
+        total_plants = Plant.objects.count()
+
+        total_customers = Customer.objects.count()
+
+        total_orders = Order.objects.count()
+
+        total_revenue = Order.objects.aggregate(
+            total=Sum('total_amount')
+        )['total'] or 0
+
+        pending_orders = Order.objects.filter(
+            status='ORDER_PLACED'
+        ).count()
+
+        delivered_orders = Order.objects.filter(
+            status='DELIVERED'
+        ).count()
+
+        cancelled_orders = Order.objects.filter(
+            status='CANCELLED'
+        ).count()
+
+        total_items_sold = OrderItem.objects.aggregate(
+            total=Sum('quantity')
+        )['total'] or 0
+
+        total_ratings = OrderRating.objects.count()
+
+        average_rating = OrderRating.objects.aggregate(
+            average=Avg('rating')
+        )['average'] or 0
+
+        data = {
+            "total_plants": total_plants,
+            "total_customers": total_customers,
+            "total_orders": total_orders,
+            "total_revenue": float(total_revenue),
+            "pending_orders": pending_orders,
+            "delivered_orders": delivered_orders,
+            "cancelled_orders": cancelled_orders,
+            "total_items_sold": total_items_sold,
+            "total_ratings": total_ratings,
+            "average_rating": round(float(average_rating), 2)
+        }
+
+        serializer = ReportSerializer(data=data)
+
+        serializer.is_valid(raise_exception=True)
+
+        return Response({
+            "status": "success",
+            "code": 200,
+            "message": "Reports fetched successfully",
+            "data": serializer.data
+        })
+
+class SettingsView(APIView):
+
+    @swagger_auto_schema(
+        tags=['settings']
+    )
+    def get(self, request):
+
+        settings = Settings.objects.first()
+
+        if not settings:
+            settings = Settings.objects.create()
+
+        serializer = SettingsSerializer(
+            settings,
+            context={'request': request}
+        )
+
+        return Response({
+            "status": "success",
+            "code": 200,
+            "message": "Settings fetched successfully",
+            "data": serializer.data
+        })
+
+    @swagger_auto_schema(
+        request_body=SettingsSerializer,
+        consumes=['multipart/form-data'],
+        tags=['settings']
+    )
+    def put(self, request):
+
+        settings = Settings.objects.first()
+
+        if not settings:
+            settings = Settings.objects.create()
+
+        serializer = SettingsSerializer(
+            settings,
+            data=request.data,
+            partial=True,
+            context={'request': request}
+        )
+
+        if serializer.is_valid():
+
+            serializer.save()
+
+            return Response({
+                "status": "success",
+                "code": 200,
+                "message": "Settings updated successfully",
+                "data": serializer.data
+            })
+
+        return Response({
+            "status": "failed",
+            "code": 400,
+            "message": "Settings update failed",
+            "errors": serializer.errors
+        }, status=status.HTTP_400_BAD_REQUEST)

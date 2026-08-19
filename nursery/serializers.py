@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import Plant, Pot, Customer, Order, OrderItem, Fertilizer, Admin, UserProfile, OrderRating
+from .models import Plant, Pot, Customer, Order, OrderItem, Fertilizer, Admin, UserProfile, OrderRating,Settings
 from django.contrib.auth.models import User
 from .models import PlantImage
 
@@ -72,7 +72,14 @@ class FertilizerSerializer(serializers.ModelSerializer):
 class AdminSerializer(serializers.ModelSerializer):
     class Meta:
         model = Admin
-        fields = "__all__"
+        fields = [
+            'id',
+            'name',
+            'email',
+            'password',
+            'mobile',
+            'role'
+        ]
 
 class AdminLoginSerializer(serializers.Serializer):
     email = serializers.EmailField()
@@ -182,4 +189,41 @@ class OrderRatingSerializer(serializers.ModelSerializer):
             )
 
         return value
+
+class ReportSerializer(serializers.Serializer):
+    total_plants = serializers.IntegerField()
+    total_customers = serializers.IntegerField()
+    total_orders = serializers.IntegerField()
+    total_revenue = serializers.FloatField()
+    pending_orders = serializers.IntegerField()
+    delivered_orders = serializers.IntegerField()
+    cancelled_orders = serializers.IntegerField()
+    total_items_sold = serializers.IntegerField()
+    total_ratings = serializers.IntegerField()
+    average_rating = serializers.FloatField()
+
+
+class SettingsSerializer(serializers.ModelSerializer):
+
+    class Meta:
+        model = Settings
+        fields = [
+            'id',
+            'website_name',
+            'phone',
+            'email',
+            'address',
+            'logo',
+            'delivery_charge',
+            'free_delivery_above',
+            'currency',
+            'admin_name',
+            'new_password',
+            'facebook_url',
+            'instagram_url',
+            'contact_phone',
+            'created_at',
+            'updated_at'
+        ]
+        read_only_fields = ['id', 'created_at', 'updated_at']
 

@@ -107,8 +107,10 @@ urlpatterns = [
     path('orders/<int:order_id>/invoice/',views.download_invoice_api,name='download-invoice'),
     path('orders/<int:order_id>/order-again/',views.order_again_api,name='order-again'),
     path('orders/<int:order_id>/cancel/',views.cancel_order_api,name='cancel-order'),
-    path('orders/<int:order_id>/rating/',views.rate_order_api,name='rate-order'
-         ),
+    path('orders/<int:order_id>/rating/',views.rate_order_api,name='rate-order'),
+    path('reports/',views.ReportsView.as_view(),name='reports'),
+    path('api/settings/',views.SettingsView.as_view(),name='settings'),
+
     path('swagger/',schema_view.with_ui('swagger', cache_timeout=0),name='schema-swagger-ui'),
     path('redoc/',schema_view.with_ui('redoc', cache_timeout=0),name='schema-redoc'),
     
