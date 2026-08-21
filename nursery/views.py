@@ -17,9 +17,27 @@ from django.contrib.auth.models import User
 from rest_framework import status
 from django.utils import timezone
 from datetime import timedelta
-from rest_framework.decorators import api_view
+from rest_framework.decorators import api_view,permission_classes
 from reportlab.pdfgen import canvas
 from django.db.models import Sum, Count, Avg
+from rest_framework.permissions import AllowAny,IsAuthenticated
+from rest_framework_simplejwt.tokens import RefreshToken
+
+from rest_framework.permissions import BasePermission
+
+
+class IsAdminUser(BasePermission):
+    message = "Only admin users can access this API."
+
+    def has_permission(self, request, view):
+        if not request.user or not request.user.is_authenticated:
+            return False
+
+        try:
+            profile = UserProfile.objects.get(user=request.user)
+            return profile.role == "Admin"
+        except UserProfile.DoesNotExist:
+            return False
 
 def home(request):
     return HttpResponse("Welcome to Nursery Management System")
@@ -865,7 +883,8 @@ class AdminDetailView(APIView):
 from rest_framework.views import APIView
 
 class UserView(APIView):
-
+    permission_classes = [AllowAny]
+    
     def get(self, request):
         users = User.objects.all()
         serializer = UserSerializer(users, many=True)
@@ -883,6 +902,7 @@ class UserView(APIView):
     tags=['users']
 )
 @api_view(['POST'])
+@permission_classes([AllowAny])
 def register_user(request):
 
     serializer = UserSerializer(data=request.data)
@@ -947,80 +967,185 @@ def delete_user(request, id):
         "message": "User deleted successfully"
     })
 
+
 @swagger_auto_schema(
     method='post',
     request_body=openapi.Schema(
         type=openapi.TYPE_OBJECT,
         required=['email', 'password'],
         properties={
-            'email': openapi.Schema(type=openapi.TYPE_STRING),
-            'password': openapi.Schema(type=openapi.TYPE_STRING),
+            'email': openapi.Schema(
+                type=openapi.TYPE_STRING
+            ),
+            'password': openapi.Schema(
+                type=openapi.TYPE_STRING
+            ),
         },
     ),
     tags=['Login']
 )
-
 @api_view(['POST'])
+@permission_classes([AllowAny])
 def login(request):
 
     email = request.data.get("email")
     password = request.data.get("password")
 
-    # Check Admin table first
+    # -----------------------------------
+    # VALIDATE INPUT
+    # -----------------------------------
+
+    if not email or not password:
+        return Response({
+            "status": "failed",
+            "message": "Email and password are required"
+        }, status=status.HTTP_400_BAD_REQUEST)
+
+
+    # -----------------------------------
+    # ADMIN LOGIN
+    # -----------------------------------
+
     try:
-        admin = Admin.objects.get(email=email, password=password)
+
+        admin = Admin.objects.get(
+            email=email,
+            password=password
+        )
+
+        # Find corresponding Django User
+        try:
+            admin_user = User.objects.get(
+                email=email
+            )
+
+        except User.DoesNotExist:
+
+            return Response({
+                "status": "failed",
+                "message": "Admin account is not linked with a Django User account"
+            }, status=status.HTTP_401_UNAUTHORIZED)
+
+
+        # Create JWT tokens
+        refresh = RefreshToken.for_user(admin_user)
+
 
         return Response({
+
             "status": "success",
+
             "message": "Admin Login Successful",
+
             "data": {
+
                 "id": admin.id,
+
                 "name": admin.name,
+
                 "email": admin.email,
+
                 "mobile": admin.mobile,
+
                 "role": "Admin"
-            }
-        })
+
+            },
+
+            "access": str(refresh.access_token),
+
+            "refresh": str(refresh)
+
+        }, status=status.HTTP_200_OK)
+
 
     except Admin.DoesNotExist:
         pass
 
-    # Check User table
+
+    # -----------------------------------
+    # CUSTOMER / USER LOGIN
+    # -----------------------------------
+
     try:
-        user = User.objects.get(email=email)
+
+        user = User.objects.get(
+            email=email
+        )
+
     except User.DoesNotExist:
+
         return Response({
             "status": "failed",
             "message": "Invalid Email or Password"
-        }, status=401)
+        }, status=status.HTTP_401_UNAUTHORIZED)
 
-    user = authenticate(username=user.username, password=password)
 
-    if user:
-        profile = UserProfile.objects.get(user=user)
+    # Check password
+    user = authenticate(
+        username=user.username,
+        password=password
+    )
+
+
+    if user is None:
 
         return Response({
-            "status": "success",
-            "message": "User Login Successful",
-            "data": {
-                "id": user.id,
-                "username": user.username,
-                "email": user.email,
-                "mobile": profile.mobile,
-                "role": profile.role
-            }
-        })
+            "status": "failed",
+            "message": "Invalid Email or Password"
+        }, status=status.HTTP_401_UNAUTHORIZED)
+
+
+    # -----------------------------------
+    # GET USER PROFILE
+    # -----------------------------------
+
+    try:
+
+        profile = UserProfile.objects.get(
+            user=user
+        )
+
+    except UserProfile.DoesNotExist:
+
+        return Response({
+            "status": "failed",
+            "message": "User profile not found"
+        }, status=status.HTTP_400_BAD_REQUEST)
+
+
+    # -----------------------------------
+    # CREATE JWT
+    # -----------------------------------
+
+    refresh = RefreshToken.for_user(user)
+
 
     return Response({
-        "status": "failed",
-        "message": "Invalid Email or Password"
-    }, status=401)
 
-    return Response({
-        "status": "failed",
-        "code": 400,
-        "errors": serializer.errors
-    })
+        "status": "success",
+
+        "message": "User Login Successful",
+
+        "data": {
+
+            "id": user.id,
+
+            "username": user.username,
+
+            "email": user.email,
+
+            "mobile": profile.mobile,
+
+            "role": profile.role
+
+        },
+
+        "access": str(refresh.access_token),
+
+        "refresh": str(refresh)
+
+    }, status=status.HTTP_200_OK)
+
 
 from rest_framework.decorators import api_view
 from rest_framework.response import Response
@@ -1972,6 +2097,7 @@ def rate_order_api(request, order_id):
     })
 
 class ReportsView(APIView):
+    permission_classes = [IsAdminUser]
 
     @swagger_auto_schema(
         tags=['reports']
@@ -2035,6 +2161,7 @@ class ReportsView(APIView):
         })
 
 class SettingsView(APIView):
+    permission_classes = [IsAdminUser]
 
     @swagger_auto_schema(
         tags=['settings']

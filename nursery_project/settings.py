@@ -25,6 +25,7 @@ SECRET_KEY = 'django-insecure-a!jr&x&_#q@f1__0$k0@1=nq_g(h=4$7m5fl&!6wl!zitdp!(=
 
 # SECURITY WARNING: don't run with debug turned on in production!
 import os
+from datetime import timedelta
 
 DEBUG = os.environ.get("DEBUG", "False") == "True"
 
@@ -148,3 +149,40 @@ MEDIA_ROOT = BASE_DIR / 'media'
 
 STATIC_URL = '/static/'
 STATIC_ROOT = BASE_DIR / 'staticfiles'
+
+REST_FRAMEWORK = {
+    "DEFAULT_AUTHENTICATION_CLASSES": (
+        "rest_framework_simplejwt.authentication.JWTAuthentication",
+    ),
+    "DEFAULT_PERMISSION_CLASSES": (
+        "rest_framework.permissions.IsAuthenticated",
+    ),
+}
+
+
+SWAGGER_SETTINGS = {
+    "SECURITY_DEFINITIONS": {
+        "Bearer": {
+            "type": "apiKey",
+            "name": "Authorization",
+            "in": "header",
+            "description": "Enter: Bearer <access_token>",
+        }
+    },
+
+    # IMPORTANT: This tells Swagger that APIs require Bearer authentication
+    "SECURITY_REQUIREMENTS": [
+        {
+            "Bearer": []
+        }
+    ],
+
+    "USE_SESSION_AUTH": False,
+}
+
+
+SIMPLE_JWT = {
+    'ACCESS_TOKEN_LIFETIME': timedelta(minutes=60),
+    'REFRESH_TOKEN_LIFETIME': timedelta(days=1),
+    'AUTH_HEADER_TYPES': ('Bearer',),
+}

@@ -21,7 +21,10 @@ from nursery.views import (
     cancel_order_api,
     rate_order_api,
 )
-
+from rest_framework_simplejwt.views import (
+    TokenObtainPairView,
+    TokenRefreshView,
+)
 
 from rest_framework import permissions
 from drf_yasg.views import get_schema_view
@@ -30,13 +33,13 @@ from django.conf import settings
 from django.conf.urls.static import static
 
 schema_view = get_schema_view(
-   openapi.Info(
-      title="Nursery API",
-      default_version='v1',
-      description="Nursery Management System API",
-   ),
-   public=True,
-   permission_classes=[permissions.AllowAny],
+    openapi.Info(
+        title="Nursery API",
+        default_version="v1",
+        description="Nursery Management API",
+    ),
+    public=True,
+    permission_classes=(permissions.AllowAny,),
 )
 
 
@@ -110,6 +113,8 @@ urlpatterns = [
     path('orders/<int:order_id>/rating/',views.rate_order_api,name='rate-order'),
     path('reports/',views.ReportsView.as_view(),name='reports'),
     path('api/settings/',views.SettingsView.as_view(),name='settings'),
+    path('api/token/', TokenObtainPairView.as_view(), name='token_obtain_pair'),
+    path('api/token/refresh/', TokenRefreshView.as_view(), name='token_refresh'),
 
     path('swagger/',schema_view.with_ui('swagger', cache_timeout=0),name='schema-swagger-ui'),
     path('redoc/',schema_view.with_ui('redoc', cache_timeout=0),name='schema-redoc'),
