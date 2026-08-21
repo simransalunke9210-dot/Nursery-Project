@@ -843,43 +843,153 @@ class AdminView(APIView):
 
 class AdminDetailView(APIView):
 
+    permission_classes = [IsAdminUser]
+
     @swagger_auto_schema(
         request_body=AdminSerializer,
         tags=['admins']
     )
     def put(self, request, id):
-        admin = get_object_or_404(Admin, id=id)
-        serializer = AdminSerializer(admin, data=request.data)
 
-        if serializer.is_valid():
-            serializer.save()
+        admin = get_object_or_404(Admin, id=id)
+
+        # Find the Django User connected to this Admin
+        try:
+            admin_user = User.objects.get(email=admin.email)
+        except User.DoesNotExist:
+            return Response({
+                "status": "failed",
+                "code": 404,
+                "message": "Django User account not found for this admin"
+            }, status=status.HTTP_404_NOT_FOUND)
+
+        # Find UserProfile
+        try:
+            profile = UserProfile.objects.get(user=admin_user)
+        except UserProfile.DoesNotExist:
+            return Response({
+                "status": "failed",
+                "code": 404,
+                "message": "UserProfile not found for this admin"
+            }, status=status.HTTP_404_NOT_FOUND)
+
+        # Get updated values
+        name = request.data.get("name", admin.name)
+        email = request.data.get("email", admin.email)
+        mobile = request.data.get("mobile", admin.mobile)
+        role = request.data.get("role", admin.role)
+        password = request.data.get("password")
+
+        # Check duplicate email
+        if email != admin.email:
+
+            if Admin.objects.filter(email=email).exclude(
+                id=admin.id
+            ).exists():
+
+                return Response({
+                    "status": "failed",
+                    "code": 400,
+                    "message": "Admin with this email already exists"
+                }, status=status.HTTP_400_BAD_REQUEST)
+
+            if User.objects.filter(email=email).exclude(
+                id=admin_user.id
+            ).exists():
+
+                return Response({
+                    "status": "failed",
+                    "code": 400,
+                    "message": "User with this email already exists"
+                }, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+
+            # -----------------------------
+            # Update Admin table
+            # -----------------------------
+
+            admin.name = name
+            admin.email = email
+            admin.mobile = mobile
+            admin.role = role
+
+            if password:
+                admin.password = password
+
+            admin.save()
+
+            # -----------------------------
+            # Update Django User
+            # -----------------------------
+
+            admin_user.username = email
+            admin_user.email = email
+
+            if password:
+                admin_user.set_password(password)
+
+            admin_user.save()
+
+            # -----------------------------
+            # Update UserProfile
+            # -----------------------------
+
+            profile.mobile = mobile
+            profile.role = role
+            profile.save()
 
             return Response({
                 "status": "success",
                 "code": 200,
                 "message": "Admin updated successfully",
-                "data": serializer.data
-            })
+                "data": {
+                    "id": admin.id,
+                    "name": admin.name,
+                    "email": admin.email,
+                    "mobile": admin.mobile,
+                    "role": admin.role
+                }
+            }, status=status.HTTP_200_OK)
 
-        return Response({
-            "status": "failed",
-            "code": 400,
-            "errors": serializer.errors
-        })
+        except Exception as e:
+
+            return Response({
+                "status": "failed",
+                "code": 400,
+                "message": "Admin update failed",
+                "error": str(e)
+            }, status=status.HTTP_400_BAD_REQUEST)
+
 
     @swagger_auto_schema(
         tags=['admins']
     )
     def delete(self, request, id):
+
         admin = get_object_or_404(Admin, id=id)
+
+        # Find corresponding Django User
+        try:
+            admin_user = User.objects.get(email=admin.email)
+        except User.DoesNotExist:
+            admin_user = None
+
+        # Delete Admin
         admin.delete()
+
+        # Delete corresponding Django User
+        if admin_user:
+            admin_user.delete()
 
         return Response({
             "status": "success",
             "code": 200,
             "message": "Admin deleted successfully"
-        })
-    
+        }, status=status.HTTP_200_OK)
+
+
+
 from rest_framework.views import APIView
 
 class UserView(APIView):
