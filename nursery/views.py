@@ -780,7 +780,7 @@ class FertilizerAddView(APIView):
         })
 
 
-class FertilizerDetailView(APIView):
+class FertilizerUpdateView(APIView):
 
     @swagger_auto_schema(
         request_body=FertilizerSerializer,
@@ -788,7 +788,11 @@ class FertilizerDetailView(APIView):
     )
     def put(self, request, id):
         fert = get_object_or_404(Fertilizer, id=id)
-        serializer = FertilizerSerializer(fert, data=request.data)
+
+        serializer = FertilizerSerializer(
+            fert,
+            data=request.data
+        )
 
         if serializer.is_valid():
             serializer.save()
@@ -796,7 +800,7 @@ class FertilizerDetailView(APIView):
             return Response({
                 "status": "success",
                 "code": 200,
-                "message": "Updated successfully",
+                "message": "Fertilizer updated successfully",
                 "data": serializer.data
             })
 
@@ -806,14 +810,18 @@ class FertilizerDetailView(APIView):
             "errors": serializer.errors
         })
 
+
+class FertilizerDeleteView(APIView):
+
     def delete(self, request, id):
         fert = get_object_or_404(Fertilizer, id=id)
+
         fert.delete()
 
         return Response({
             "status": "success",
             "code": 200,
-            "message": "Deleted successfully"
+            "message": "Fertilizer deleted successfully"
         })
     
 class AdminView(APIView):

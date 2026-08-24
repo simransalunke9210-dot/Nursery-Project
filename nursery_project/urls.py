@@ -3,7 +3,7 @@ from django.urls import path,include
 from nursery import views
 from django.conf import settings
 from django.conf.urls.static import static
-from nursery.views import FertilizerListView, FertilizerAddView, FertilizerDetailView, AdminView, AdminDetailView
+from nursery.views import FertilizerListView, FertilizerAddView, FertilizerUpdateView, FertilizerDeleteView,AdminView, AdminDetailView
 from nursery.views import (
     add_plant,
     plant_list,
@@ -89,8 +89,8 @@ urlpatterns = [
 
     path('api/fertilizer/allFertilizers/',FertilizerListView.as_view()),
     path('api/fertilizer/addFertilizer/',FertilizerAddView.as_view()),
-    path('api/fertilizer/updateFertilizer/<int:id>/',FertilizerDetailView.as_view()),
-    path('api/fertilizer/deleteFertilizer/<int:id>/',FertilizerDetailView.as_view()),
+    path('api/fertilizer/updateFertilizer/<int:id>/',FertilizerUpdateView.as_view()),
+    path('api/fertilizer/deleteFertilizer/<int:id>/',FertilizerDeleteView.as_view()),
 
     path('api/admins/', AdminView.as_view()),
     path('api/admins/<int:id>/', AdminDetailView.as_view()),
