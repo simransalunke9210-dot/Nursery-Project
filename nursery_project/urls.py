@@ -88,7 +88,9 @@ urlpatterns = [
     path('api/orderitem/deleteOrderItem/<int:id>/', views.delete_order_item_api),
 
     path('api/fertilizer/allFertilizers/', FertilizerView.as_view()),
+    path('api/fertilizer/addFertilizer/', FertilizerView.as_view()),
     path('api/fertilizer/updateFertilizer/<int:id>/', FertilizerDetailView.as_view()),
+    path('api/fertilizer/deleteFertilizer/<int:id>/', FertilizerDetailView.as_view()),
 
     path('api/admins/', AdminView.as_view()),
     path('api/admins/<int:id>/', AdminDetailView.as_view()),
