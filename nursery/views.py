@@ -740,7 +740,7 @@ from .models import Fertilizer
 from .serializers import FertilizerSerializer
 
 from drf_yasg.utils import swagger_auto_schema
-class FertilizerView(APIView):
+class FertilizerListView(APIView):
 
     def get(self, request):
         fertilizers = Fertilizer.objects.all()
@@ -752,13 +752,20 @@ class FertilizerView(APIView):
             "message": "All fertilizers fetched",
             "data": serializer.data
         })
-    
-    @swagger_auto_schema(request_body=FertilizerSerializer)
+
+
+class FertilizerAddView(APIView):
+
+    @swagger_auto_schema(
+        request_body=FertilizerSerializer,
+        tags=['fertilizer']
+    )
     def post(self, request):
         serializer = FertilizerSerializer(data=request.data)
 
         if serializer.is_valid():
             serializer.save()
+
             return Response({
                 "status": "success",
                 "code": 201,
@@ -771,24 +778,31 @@ class FertilizerView(APIView):
             "code": 400,
             "errors": serializer.errors
         })
-    
+
+
 class FertilizerDetailView(APIView):
 
-    @swagger_auto_schema(request_body=FertilizerSerializer)
+    @swagger_auto_schema(
+        request_body=FertilizerSerializer,
+        tags=['fertilizer']
+    )
     def put(self, request, id):
         fert = get_object_or_404(Fertilizer, id=id)
         serializer = FertilizerSerializer(fert, data=request.data)
 
         if serializer.is_valid():
             serializer.save()
+
             return Response({
                 "status": "success",
+                "code": 200,
                 "message": "Updated successfully",
                 "data": serializer.data
             })
 
         return Response({
             "status": "failed",
+            "code": 400,
             "errors": serializer.errors
         })
 
@@ -798,6 +812,7 @@ class FertilizerDetailView(APIView):
 
         return Response({
             "status": "success",
+            "code": 200,
             "message": "Deleted successfully"
         })
     
