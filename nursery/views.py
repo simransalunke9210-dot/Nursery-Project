@@ -1733,20 +1733,47 @@ from django.contrib.auth.models import User
 
 from .models import Cart, CartItem, Plant
 
+def get_product(product_type, product_id):
+
+    if product_type == 'plant':
+        try:
+            return Plant.objects.get(id=product_id)
+        except Plant.DoesNotExist:
+            return None
+
+    elif product_type == 'pot':
+        try:
+            return Pot.objects.get(id=product_id)
+        except Pot.DoesNotExist:
+            return None
+
+    elif product_type == 'fertilizer':
+        try:
+            return Fertilizer.objects.get(id=product_id)
+        except Fertilizer.DoesNotExist:
+            return None
+
+    return None
+
 
 @swagger_auto_schema(
     method='post',
     request_body=openapi.Schema(
         type=openapi.TYPE_OBJECT,
-        required=['user_id', 'plant_id'],
+        required=['user_id', 'product_type', 'product_id'],
         properties={
             'user_id': openapi.Schema(
                 type=openapi.TYPE_INTEGER,
                 description='User ID'
             ),
-            'plant_id': openapi.Schema(
+            'product_type': openapi.Schema(
+                type=openapi.TYPE_STRING,
+                enum=['plant', 'pot', 'fertilizer'],
+                description='Product type'
+            ),
+            'product_id': openapi.Schema(
                 type=openapi.TYPE_INTEGER,
-                description='Plant ID'
+                description='Product ID'
             ),
             'quantity': openapi.Schema(
                 type=openapi.TYPE_INTEGER,
@@ -1761,7 +1788,8 @@ from .models import Cart, CartItem, Plant
 def add_to_cart(request):
 
     user_id = request.data.get('user_id')
-    plant_id = request.data.get('plant_id')
+    product_type = request.data.get('product_type')
+    product_id = request.data.get('product_id')
     quantity = request.data.get('quantity', 1)
 
     if not user_id:
@@ -1770,10 +1798,22 @@ def add_to_cart(request):
             "message": "user_id is required"
         }, status=status.HTTP_400_BAD_REQUEST)
 
-    if not plant_id:
+    if not product_type:
         return Response({
             "status": "failed",
-            "message": "plant_id is required"
+            "message": "product_type is required"
+        }, status=status.HTTP_400_BAD_REQUEST)
+
+    if not product_id:
+        return Response({
+            "status": "failed",
+            "message": "product_id is required"
+        }, status=status.HTTP_400_BAD_REQUEST)
+
+    if product_type not in ['plant', 'pot', 'fertilizer']:
+        return Response({
+            "status": "failed",
+            "message": "Invalid product_type. Use plant, pot or fertilizer"
         }, status=status.HTTP_400_BAD_REQUEST)
 
     try:
@@ -1799,19 +1839,20 @@ def add_to_cart(request):
             "message": "User not found"
         }, status=status.HTTP_404_NOT_FOUND)
 
-    try:
-        plant = Plant.objects.get(id=plant_id)
-    except Plant.DoesNotExist:
+    product = get_product(product_type, product_id)
+
+    if not product:
         return Response({
             "status": "failed",
-            "message": "Plant not found"
+            "message": f"{product_type.capitalize()} not found"
         }, status=status.HTTP_404_NOT_FOUND)
 
     cart, created = Cart.objects.get_or_create(user=user)
 
     cart_item, item_created = CartItem.objects.get_or_create(
         cart=cart,
-        plant=plant,
+        product_type=product_type,
+        product_id=product_id,
         defaults={
             "quantity": quantity
         }
@@ -1823,12 +1864,13 @@ def add_to_cart(request):
 
     return Response({
         "status": "success",
-        "message": "Plant added to cart successfully",
+        "message": f"{product_type.capitalize()} added to cart successfully",
         "cart_id": cart.id,
-        "plant_id": plant.id,
-        "plant_name": plant.name,
+        "product_type": product_type,
+        "product_id": product.id,
+        "product_name": product.name,
         "quantity": cart_item.quantity,
-        "price": plant.price
+        "price": product.price
     }, status=status.HTTP_201_CREATED)
 
 
@@ -1871,13 +1913,22 @@ def view_cart(request):
 
     for item in cart.items.all():
 
-        item_total = item.plant.price * item.quantity
+        product = get_product(
+            item.product_type,
+            item.product_id
+        )
+
+        if not product:
+            continue
+
+        item_total = product.price * item.quantity
         total_amount += item_total
 
         items.append({
-            "plant_id": item.plant.id,
-            "plant_name": item.plant.name,
-            "price": item.plant.price,
+            "product_type": item.product_type,
+            "product_id": product.id,
+            "product_name": product.name,
+            "price": product.price,
             "quantity": item.quantity,
             "item_total": item_total
         })
@@ -1890,6 +1941,7 @@ def view_cart(request):
         "total_amount": total_amount
     }, status=status.HTTP_200_OK)
 
+
 @swagger_auto_schema(
     method='delete',
     manual_parameters=[
@@ -1901,9 +1953,16 @@ def view_cart(request):
             required=True
         ),
         openapi.Parameter(
-            'plant_id',
+            'product_type',
             openapi.IN_QUERY,
-            description='Plant ID',
+            description='Product type',
+            type=openapi.TYPE_STRING,
+            required=True
+        ),
+        openapi.Parameter(
+            'product_id',
+            openapi.IN_QUERY,
+            description='Product ID',
             type=openapi.TYPE_INTEGER,
             required=True
         ),
@@ -1914,78 +1973,77 @@ def view_cart(request):
 def remove_from_cart(request):
 
     user_id = request.GET.get('user_id')
-    plant_id = request.GET.get('plant_id')
+    product_type = request.GET.get('product_type')
+    product_id = request.GET.get('product_id')
 
     if not user_id:
-        return Response(
-            {
-                "status": "failed",
-                "message": "user_id is required"
-            },
-            status=status.HTTP_400_BAD_REQUEST
-        )
+        return Response({
+            "status": "failed",
+            "message": "user_id is required"
+        }, status=status.HTTP_400_BAD_REQUEST)
 
-    if not plant_id:
-        return Response(
-            {
-                "status": "failed",
-                "message": "plant_id is required"
-            },
-            status=status.HTTP_400_BAD_REQUEST
-        )
+    if not product_type:
+        return Response({
+            "status": "failed",
+            "message": "product_type is required"
+        }, status=status.HTTP_400_BAD_REQUEST)
+
+    if not product_id:
+        return Response({
+            "status": "failed",
+            "message": "product_id is required"
+        }, status=status.HTTP_400_BAD_REQUEST)
 
     try:
         cart = Cart.objects.get(user_id=user_id)
     except Cart.DoesNotExist:
-        return Response(
-            {
-                "status": "failed",
-                "message": "Cart not found"
-            },
-            status=status.HTTP_404_NOT_FOUND
-        )
+        return Response({
+            "status": "failed",
+            "message": "Cart not found"
+        }, status=status.HTTP_404_NOT_FOUND)
 
     try:
         cart_item = CartItem.objects.get(
             cart=cart,
-            plant_id=plant_id
+            product_type=product_type,
+            product_id=product_id
         )
     except CartItem.DoesNotExist:
-        return Response(
-            {
-                "status": "failed",
-                "message": "Plant not found in cart"
-            },
-            status=status.HTTP_404_NOT_FOUND
-        )
+        return Response({
+            "status": "failed",
+            "message": "Product not found in cart"
+        }, status=status.HTTP_404_NOT_FOUND)
 
     cart_item.delete()
 
-    return Response(
-        {
-            "status": "success",
-            "message": "Plant removed from cart successfully"
-        },
-        status=status.HTTP_200_OK
-    )
+    return Response({
+        "status": "success",
+        "message": "Product removed from cart successfully"
+    }, status=status.HTTP_200_OK)
 
 @swagger_auto_schema(
     method='put',
     request_body=openapi.Schema(
         type=openapi.TYPE_OBJECT,
-        required=['user_id', 'plant_id', 'quantity'],
+        required=[
+            'user_id',
+            'product_type',
+            'product_id',
+            'quantity'
+        ],
         properties={
             'user_id': openapi.Schema(
-                type=openapi.TYPE_INTEGER,
-                description='User ID'
+                type=openapi.TYPE_INTEGER
             ),
-            'plant_id': openapi.Schema(
-                type=openapi.TYPE_INTEGER,
-                description='Plant ID'
+            'product_type': openapi.Schema(
+                type=openapi.TYPE_STRING,
+                enum=['plant', 'pot', 'fertilizer']
+            ),
+            'product_id': openapi.Schema(
+                type=openapi.TYPE_INTEGER
             ),
             'quantity': openapi.Schema(
                 type=openapi.TYPE_INTEGER,
-                description='New quantity',
                 minimum=1
             ),
         },
@@ -1996,100 +2054,93 @@ def remove_from_cart(request):
 def update_cart_quantity(request):
 
     user_id = request.data.get('user_id')
-    plant_id = request.data.get('plant_id')
+    product_type = request.data.get('product_type')
+    product_id = request.data.get('product_id')
     quantity = request.data.get('quantity')
 
     if not user_id:
-        return Response(
-            {
-                "status": "failed",
-                "message": "user_id is required"
-            },
-            status=status.HTTP_400_BAD_REQUEST
-        )
+        return Response({
+            "status": "failed",
+            "message": "user_id is required"
+        }, status=status.HTTP_400_BAD_REQUEST)
 
-    if not plant_id:
-        return Response(
-            {
-                "status": "failed",
-                "message": "plant_id is required"
-            },
-            status=status.HTTP_400_BAD_REQUEST
-        )
+    if not product_type:
+        return Response({
+            "status": "failed",
+            "message": "product_type is required"
+        }, status=status.HTTP_400_BAD_REQUEST)
+
+    if not product_id:
+        return Response({
+            "status": "failed",
+            "message": "product_id is required"
+        }, status=status.HTTP_400_BAD_REQUEST)
 
     if quantity is None:
-        return Response(
-            {
-                "status": "failed",
-                "message": "quantity is required"
-            },
-            status=status.HTTP_400_BAD_REQUEST
-        )
+        return Response({
+            "status": "failed",
+            "message": "quantity is required"
+        }, status=status.HTTP_400_BAD_REQUEST)
 
     try:
         quantity = int(quantity)
 
         if quantity <= 0:
-            return Response(
-                {
-                    "status": "failed",
-                    "message": "quantity must be greater than 0"
-                },
-                status=status.HTTP_400_BAD_REQUEST
-            )
+            return Response({
+                "status": "failed",
+                "message": "quantity must be greater than 0"
+            }, status=status.HTTP_400_BAD_REQUEST)
 
     except (ValueError, TypeError):
-        return Response(
-            {
-                "status": "failed",
-                "message": "quantity must be a valid number"
-            },
-            status=status.HTTP_400_BAD_REQUEST
-        )
+        return Response({
+            "status": "failed",
+            "message": "quantity must be a valid number"
+        }, status=status.HTTP_400_BAD_REQUEST)
 
     try:
         cart = Cart.objects.get(user_id=user_id)
     except Cart.DoesNotExist:
-        return Response(
-            {
-                "status": "failed",
-                "message": "Cart not found"
-            },
-            status=status.HTTP_404_NOT_FOUND
-        )
+        return Response({
+            "status": "failed",
+            "message": "Cart not found"
+        }, status=status.HTTP_404_NOT_FOUND)
 
     try:
         cart_item = CartItem.objects.get(
             cart=cart,
-            plant_id=plant_id
+            product_type=product_type,
+            product_id=product_id
         )
     except CartItem.DoesNotExist:
-        return Response(
-            {
-                "status": "failed",
-                "message": "Plant not found in cart"
-            },
-            status=status.HTTP_404_NOT_FOUND
-        )
+        return Response({
+            "status": "failed",
+            "message": "Product not found in cart"
+        }, status=status.HTTP_404_NOT_FOUND)
+
+    product = get_product(product_type, product_id)
+
+    if not product:
+        return Response({
+            "status": "failed",
+            "message": "Product not found"
+        }, status=status.HTTP_404_NOT_FOUND)
 
     cart_item.quantity = quantity
     cart_item.save()
 
-    item_total = cart_item.plant.price * cart_item.quantity
+    item_total = product.price * cart_item.quantity
 
-    return Response(
-        {
-            "status": "success",
-            "message": "Cart quantity updated successfully",
-            "cart_id": cart.id,
-            "plant_id": cart_item.plant.id,
-            "plant_name": cart_item.plant.name,
-            "quantity": cart_item.quantity,
-            "price": cart_item.plant.price,
-            "item_total": item_total
-        },
-        status=status.HTTP_200_OK
-    )
+    return Response({
+        "status": "success",
+        "message": "Cart quantity updated successfully",
+        "cart_id": cart.id,
+        "product_type": product_type,
+        "product_id": product.id,
+        "product_name": product.name,
+        "quantity": cart_item.quantity,
+        "price": product.price,
+        "item_total": item_total
+    }, status=status.HTTP_200_OK)
 
 from .models import Wishlist, WishlistItem
 
@@ -2097,94 +2148,92 @@ from .models import Wishlist, WishlistItem
     method='post',
     request_body=openapi.Schema(
         type=openapi.TYPE_OBJECT,
-        required=['user_id', 'plant_id'],
+        required=['user_id', 'product_type', 'product_id'],
         properties={
             'user_id': openapi.Schema(
-                type=openapi.TYPE_INTEGER,
-                description='User ID'
+                type=openapi.TYPE_INTEGER
             ),
-            'plant_id': openapi.Schema(
-                type=openapi.TYPE_INTEGER,
-                description='Plant ID'
+            'product_type': openapi.Schema(
+                type=openapi.TYPE_STRING,
+                enum=['plant', 'pot', 'fertilizer']
+            ),
+            'product_id': openapi.Schema(
+                type=openapi.TYPE_INTEGER
             ),
         },
     ),
     tags=['wishlist']
 )
-
 @api_view(['POST'])
 def add_to_wishlist(request):
 
     user_id = request.data.get('user_id')
-    plant_id = request.data.get('plant_id')
+    product_type = request.data.get('product_type')
+    product_id = request.data.get('product_id')
 
     if not user_id:
-        return Response(
-            {
-                "status": "failed",
-                "message": "user_id is required"
-            },
-            status=status.HTTP_400_BAD_REQUEST
-        )
+        return Response({
+            "status": "failed",
+            "message": "user_id is required"
+        }, status=status.HTTP_400_BAD_REQUEST)
 
-    if not plant_id:
-        return Response(
-            {
-                "status": "failed",
-                "message": "plant_id is required"
-            },
-            status=status.HTTP_400_BAD_REQUEST
-        )
+    if not product_type:
+        return Response({
+            "status": "failed",
+            "message": "product_type is required"
+        }, status=status.HTTP_400_BAD_REQUEST)
+
+    if not product_id:
+        return Response({
+            "status": "failed",
+            "message": "product_id is required"
+        }, status=status.HTTP_400_BAD_REQUEST)
+
+    if product_type not in ['plant', 'pot', 'fertilizer']:
+        return Response({
+            "status": "failed",
+            "message": "Invalid product_type. Use plant, pot or fertilizer"
+        }, status=status.HTTP_400_BAD_REQUEST)
 
     try:
         user = User.objects.get(id=user_id)
     except User.DoesNotExist:
-        return Response(
-            {
-                "status": "failed",
-                "message": "User not found"
-            },
-            status=status.HTTP_404_NOT_FOUND
-        )
+        return Response({
+            "status": "failed",
+            "message": "User not found"
+        }, status=status.HTTP_404_NOT_FOUND)
 
-    try:
-        plant = Plant.objects.get(id=plant_id)
-    except Plant.DoesNotExist:
-        return Response(
-            {
-                "status": "failed",
-                "message": "Plant not found"
-            },
-            status=status.HTTP_404_NOT_FOUND
-        )
+    product = get_product(product_type, product_id)
+
+    if not product:
+        return Response({
+            "status": "failed",
+            "message": f"{product_type.capitalize()} not found"
+        }, status=status.HTTP_404_NOT_FOUND)
 
     wishlist, created = Wishlist.objects.get_or_create(user=user)
 
     wishlist_item, item_created = WishlistItem.objects.get_or_create(
         wishlist=wishlist,
-        plant=plant
+        product_type=product_type,
+        product_id=product_id
     )
 
     if not item_created:
-        return Response(
-            {
-                "status": "failed",
-                "message": "Plant already exists in wishlist"
-            },
-            status=status.HTTP_400_BAD_REQUEST
-        )
+        return Response({
+            "status": "failed",
+            "message": "Product already exists in wishlist"
+        }, status=status.HTTP_400_BAD_REQUEST)
 
-    return Response(
-        {
-            "status": "success",
-            "message": "Plant added to wishlist successfully",
-            "wishlist_id": wishlist.id,
-            "plant_id": plant.id,
-            "plant_name": plant.name,
-            "price": plant.price
-        },
-        status=status.HTTP_201_CREATED
-    )
+    return Response({
+        "status": "success",
+        "message": f"{product_type.capitalize()} added to wishlist successfully",
+        "wishlist_id": wishlist.id,
+        "product_type": product_type,
+        "product_id": product.id,
+        "product_name": product.name,
+        "price": product.price
+    }, status=status.HTTP_201_CREATED)
 
 @swagger_auto_schema(
     method='get',
@@ -2199,55 +2248,53 @@ def add_to_wishlist(request):
     ],
     tags=['wishlist']
 )
-
 @api_view(['GET'])
 def view_wishlist(request):
 
     user_id = request.GET.get('user_id')
 
     if not user_id:
-        return Response(
-            {
-                "status": "failed",
-                "message": "user_id is required"
-            },
-            status=status.HTTP_400_BAD_REQUEST
-        )
+        return Response({
+            "status": "failed",
+            "message": "user_id is required"
+        }, status=status.HTTP_400_BAD_REQUEST)
 
     try:
         user = User.objects.get(id=user_id)
     except User.DoesNotExist:
-        return Response(
-            {
-                "status": "failed",
-                "message": "User not found"
-            },
-            status=status.HTTP_404_NOT_FOUND
-        )
+        return Response({
+            "status": "failed",
+            "message": "User not found"
+        }, status=status.HTTP_404_NOT_FOUND)
 
     wishlist, created = Wishlist.objects.get_or_create(user=user)
 
     items = []
 
     for item in wishlist.items.all():
-        items.append(
-            {
-                "plant_id": item.plant.id,
-                "plant_name": item.plant.name,
-                "price": item.plant.price,
-                "created_at": item.created_at
-            }
+
+        product = get_product(
+            item.product_type,
+            item.product_id
         )
 
-    return Response(
-        {
-            "status": "success",
-            "wishlist_id": wishlist.id,
-            "user_id": user.id,
-            "items": items
-        },
-        status=status.HTTP_200_OK
-    )
+        if not product:
+            continue
+
+        items.append({
+            "product_type": item.product_type,
+            "product_id": product.id,
+            "product_name": product.name,
+            "price": product.price,
+            "created_at": item.created_at
+        })
+
+    return Response({
+        "status": "success",
+        "wishlist_id": wishlist.id,
+        "user_id": user.id,
+        "items": items
+    }, status=status.HTTP_200_OK)
 
 @swagger_auto_schema(
     method='delete',
@@ -2260,9 +2307,16 @@ def view_wishlist(request):
             required=True
         ),
         openapi.Parameter(
-            'plant_id',
+            'product_type',
             openapi.IN_QUERY,
-            description='Plant ID',
+            description='Product type',
+            type=openapi.TYPE_STRING,
+            required=True
+        ),
+        openapi.Parameter(
+            'product_id',
+            openapi.IN_QUERY,
+            description='Product ID',
             type=openapi.TYPE_INTEGER,
             required=True
         ),
@@ -2273,60 +2327,53 @@ def view_wishlist(request):
 def remove_from_wishlist(request):
 
     user_id = request.GET.get('user_id')
-    plant_id = request.GET.get('plant_id')
+    product_type = request.GET.get('product_type')
+    product_id = request.GET.get('product_id')
 
     if not user_id:
-        return Response(
-            {
-                "status": "failed",
-                "message": "user_id is required"
-            },
-            status=status.HTTP_400_BAD_REQUEST
-        )
+        return Response({
+            "status": "failed",
+            "message": "user_id is required"
+        }, status=status.HTTP_400_BAD_REQUEST)
 
-    if not plant_id:
-        return Response(
-            {
-                "status": "failed",
-                "message": "plant_id is required"
-            },
-            status=status.HTTP_400_BAD_REQUEST
-        )
+    if not product_type:
+        return Response({
+            "status": "failed",
+            "message": "product_type is required"
+        }, status=status.HTTP_400_BAD_REQUEST)
+
+    if not product_id:
+        return Response({
+            "status": "failed",
+            "message": "product_id is required"
+        }, status=status.HTTP_400_BAD_REQUEST)
 
     try:
         wishlist = Wishlist.objects.get(user_id=user_id)
     except Wishlist.DoesNotExist:
-        return Response(
-            {
-                "status": "failed",
-                "message": "Wishlist not found"
-            },
-            status=status.HTTP_404_NOT_FOUND
-        )
+        return Response({
+            "status": "failed",
+            "message": "Wishlist not found"
+        }, status=status.HTTP_404_NOT_FOUND)
 
     try:
         wishlist_item = WishlistItem.objects.get(
             wishlist=wishlist,
-            plant_id=plant_id
+            product_type=product_type,
+            product_id=product_id
         )
     except WishlistItem.DoesNotExist:
-        return Response(
-            {
-                "status": "failed",
-                "message": "Plant not found in wishlist"
-            },
-            status=status.HTTP_404_NOT_FOUND
-        )
+        return Response({
+            "status": "failed",
+            "message": "Product not found in wishlist"
+        }, status=status.HTTP_404_NOT_FOUND)
 
     wishlist_item.delete()
 
-    return Response(
-        {
-            "status": "success",
-            "message": "Plant removed from wishlist successfully"
-        },
-        status=status.HTTP_200_OK
-    )
+    return Response({
+        "status": "success",
+        "message": "Product removed from wishlist successfully"
+    }, status=status.HTTP_200_OK)
 
 @api_view(['GET'])
 def track_order_api(request, order_id):

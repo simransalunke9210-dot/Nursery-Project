@@ -212,22 +212,36 @@ class CartItem(models.Model):
         on_delete=models.CASCADE,
         related_name='items'
     )
-    plant = models.ForeignKey(
-        Plant,
-        on_delete=models.CASCADE
+
+    product_type = models.CharField(
+        max_length=20,
+        choices=[
+            ('plant', 'Plant'),
+            ('pot', 'Pot'),
+            ('fertilizer', 'Fertilizer'),
+        ],
+        null=True,
+        blank=True
     )
+
+    product_id = models.PositiveIntegerField(
+        null=True,
+        blank=True
+    )
+
     quantity = models.PositiveIntegerField(default=1)
 
     class Meta:
         constraints = [
             models.UniqueConstraint(
-                fields=['cart', 'plant'],
-                name='unique_cart_plant'
+                fields=['cart', 'product_type', 'product_id'],
+                name='unique_cart_product'
             )
         ]
 
     def __str__(self):
-        return f"{self.plant.name} x {self.quantity}"
+        return f"{self.product_type} #{self.product_id} x {self.quantity}"
+
 
 class Wishlist(models.Model):
     user = models.OneToOneField(
@@ -248,22 +262,38 @@ class WishlistItem(models.Model):
         on_delete=models.CASCADE,
         related_name='items'
     )
-    plant = models.ForeignKey(
-        Plant,
-        on_delete=models.CASCADE
+
+    product_type = models.CharField(
+        max_length=20,
+        choices=[
+            ('plant', 'Plant'),
+            ('pot', 'Pot'),
+            ('fertilizer', 'Fertilizer'),
+        ],
+        null=True,
+        blank=True
     )
+
+    product_id = models.PositiveIntegerField(
+        null=True,
+        blank=True
+    )
+
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
         constraints = [
             models.UniqueConstraint(
-                fields=['wishlist', 'plant'],
-                name='unique_wishlist_plant'
+                fields=['wishlist', 'product_type', 'product_id'],
+                name='unique_wishlist_product'
             )
         ]
 
     def __str__(self):
-        return f"{self.plant.name} - {self.wishlist.user.username}"
+        return (
+            f"{self.product_type} #{self.product_id} - "
+            f"{self.wishlist.user.username}"
+        )
 
 class OrderRating(models.Model):
 

@@ -198,8 +198,23 @@ from .models import Cart, CartItem
 
 class AddToCartSerializer(serializers.Serializer):
     user_id = serializers.IntegerField()
-    plant_id = serializers.IntegerField()
+
+    product_type = serializers.ChoiceField(
+        choices=['plant', 'pot', 'fertilizer']
+    )
+
+    product_id = serializers.IntegerField()
+
     quantity = serializers.IntegerField(default=1)
+
+class AddToWishlistSerializer(serializers.Serializer):
+    user_id = serializers.IntegerField()
+
+    product_type = serializers.ChoiceField(
+        choices=['plant', 'pot', 'fertilizer']
+    )
+
+    product_id = serializers.IntegerField()
 
 
 class OrderItemSerializer(serializers.ModelSerializer):
