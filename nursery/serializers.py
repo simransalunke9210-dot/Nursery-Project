@@ -1,7 +1,7 @@
 from rest_framework import serializers
 from .models import Plant, Pot, Customer, Order, OrderItem, Fertilizer, Admin, UserProfile, OrderRating,Settings
 from django.contrib.auth.models import User
-from .models import PlantImage
+from .models import PlantImage, PotImage, FertilizerImage
 
 class PlantImageSerializer(serializers.ModelSerializer):
 
@@ -43,10 +43,47 @@ class PlantSerializer(serializers.ModelSerializer):
             'quantity',
             'images'
         ]
+
+class PotImageSerializer(serializers.ModelSerializer):
+
+    class Meta:
+        model = PotImage
+        fields = ['id', 'image']
+
+    def to_representation(self, instance):
+        data = super().to_representation(instance)
+
+        request = self.context.get('request')
+
+        if instance.image:
+            if request:
+                data['image'] = request.build_absolute_uri(
+                    instance.image.url
+                )
+            else:
+                data['image'] = instance.image.url
+
+        return data
+
 class PotSerializer(serializers.ModelSerializer):
+
+    images = PotImageSerializer(
+        source='pot_images',
+        many=True,
+        read_only=True
+    )
+
     class Meta:
         model = Pot
-        fields = '__all__'
+        fields = [
+            'id',
+            'name',
+            'category',
+            'price',
+            'stock',
+            'description',
+            'images'
+        ]
 
 class CustomerSerializer(serializers.ModelSerializer):
     class Meta:
@@ -64,10 +101,45 @@ class OrderItemSerializer(serializers.ModelSerializer):
         model = OrderItem
         fields = '__all__'
 
+class FertilizerImageSerializer(serializers.ModelSerializer):
+
+    class Meta:
+        model = FertilizerImage
+        fields = ['id', 'image']
+
+    def to_representation(self, instance):
+        data = super().to_representation(instance)
+
+        request = self.context.get('request')
+
+        if instance.image:
+            if request:
+                data['image'] = request.build_absolute_uri(
+                    instance.image.url
+                )
+            else:
+                data['image'] = instance.image.url
+
+        return data
+
 class FertilizerSerializer(serializers.ModelSerializer):
+
+    images = FertilizerImageSerializer(
+        source='fertilizer_images',
+        many=True,
+        read_only=True
+    )
+
     class Meta:
         model = Fertilizer
-        fields = "__all__"    
+        fields = [
+            'id',
+            'name',
+            'price',
+            'quantity',
+            'description',
+            'images'
+        ]   
 
 class AdminSerializer(serializers.ModelSerializer):
     class Meta:

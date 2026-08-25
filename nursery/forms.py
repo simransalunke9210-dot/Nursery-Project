@@ -10,4 +10,4 @@ class PlantForm(forms.ModelForm):
 class PotForm(forms.ModelForm):
     class Meta:
         model = Pot
-        fields = ['name', 'category', 'price', 'stock', 'description', 'image']
+        fields = ['name', 'category', 'price', 'stock', 'description']

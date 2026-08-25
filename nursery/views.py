@@ -1,5 +1,5 @@
 from django.shortcuts import render, redirect, get_object_or_404
-from .models import Plant, Pot, Customer, Order, OrderItem, Fertilizer, Admin, PlantImage,OrderRating,Settings
+from .models import Plant, Pot, Customer, Order, OrderItem, Fertilizer, Admin, PlantImage, PotImage, FertilizerImage, OrderRating,Settings
 from .forms import PlantForm, PotForm
 
 from django.contrib.auth import authenticate
@@ -351,8 +351,7 @@ def delete_pot(request, id):
 
 @swagger_auto_schema(
     method='get',
-    tags=['Pots'],
-
+    tags=['Pots']
 )
 @api_view(['GET'])
 @permission_classes([AllowAny])
@@ -360,7 +359,11 @@ def get_pots(request):
 
     pots = Pot.objects.all()
 
-    serializer = PotSerializer(pots, many=True)
+    serializer = PotSerializer(
+        pots,
+        many=True,
+        context={'request': request}
+    )
 
     return Response({
         "status": "success",
@@ -369,77 +372,279 @@ def get_pots(request):
         "data": serializer.data
     })
 
+
 @swagger_auto_schema(
     method='post',
     tags=['Pots'],
-    request_body=PotSerializer
+    manual_parameters=[
+        openapi.Parameter(
+            'name',
+            openapi.IN_FORM,
+            type=openapi.TYPE_STRING,
+            required=True
+        ),
+        openapi.Parameter(
+            'category',
+            openapi.IN_FORM,
+            type=openapi.TYPE_STRING,
+            required=True
+        ),
+        openapi.Parameter(
+            'price',
+            openapi.IN_FORM,
+            type=openapi.TYPE_NUMBER,
+            required=True
+        ),
+        openapi.Parameter(
+            'stock',
+            openapi.IN_FORM,
+            type=openapi.TYPE_INTEGER,
+            required=True
+        ),
+        openapi.Parameter(
+            'description',
+            openapi.IN_FORM,
+            type=openapi.TYPE_STRING,
+            required=True
+        ),
+        openapi.Parameter(
+            'image1',
+            openapi.IN_FORM,
+            type=openapi.TYPE_FILE,
+            required=True
+        ),
+        openapi.Parameter(
+            'image2',
+            openapi.IN_FORM,
+            type=openapi.TYPE_FILE,
+            required=False
+        ),
+        openapi.Parameter(
+            'image3',
+            openapi.IN_FORM,
+            type=openapi.TYPE_FILE,
+            required=False
+        ),
+    ],
+    consumes=['multipart/form-data']
 )
-
 @api_view(['POST'])
+@parser_classes([MultiPartParser, FormParser])
 def add_pot_api(request):
 
+    pot_data = {
+        'name': request.data.get('name'),
+        'category': request.data.get('category'),
+        'price': request.data.get('price'),
+        'stock': request.data.get('stock'),
+        'description': request.data.get('description'),
+    }
+
     serializer = PotSerializer(
-        data=request.data
+        data=pot_data,
+        context={'request': request}
     )
 
-    if serializer.is_valid():
-
-        serializer.save()
+    if not serializer.is_valid():
 
         return Response({
-            "status": "success",
-            "code": 200,
-            "message": "Pot added successfully",
-            "data": serializer.data
-        })
+            "status": "failed",
+            "code": 400,
+            "message": "Pot addition failed",
+            "errors": serializer.errors
+        }, status=status.HTTP_400_BAD_REQUEST)
+
+    pot = serializer.save()
+
+    # Get uploaded images
+    images = []
+
+    image1 = request.FILES.get('image1')
+    image2 = request.FILES.get('image2')
+    image3 = request.FILES.get('image3')
+
+    if image1:
+        images.append(image1)
+
+    if image2:
+        images.append(image2)
+
+    if image3:
+        images.append(image3)
+
+    # At least one image
+    if len(images) == 0:
+
+        pot.delete()
+
+        return Response({
+            "status": "failed",
+            "code": 400,
+            "message": "At least one image is required"
+        }, status=status.HTTP_400_BAD_REQUEST)
+
+    # Maximum 3 images
+    if len(images) > 3:
+
+        pot.delete()
+
+        return Response({
+            "status": "failed",
+            "code": 400,
+            "message": "Maximum 3 images are allowed"
+        }, status=status.HTTP_400_BAD_REQUEST)
+
+    # Save images
+    for image in images:
+
+        PotImage.objects.create(
+            pot=pot,
+            image=image
+        )
 
     return Response({
-        "status": "failed",
-        "code": 400,
-        "errors": serializer.errors
-    })
+        "status": "success",
+        "code": 201,
+        "message": "Pot added successfully",
+        "data": PotSerializer(
+            pot,
+            context={'request': request}
+        ).data
+    }, status=status.HTTP_201_CREATED)
+
 
 @swagger_auto_schema(
     method='put',
     tags=['Pots'],
+    manual_parameters=[
+        openapi.Parameter(
+            'name',
+            openapi.IN_FORM,
+            type=openapi.TYPE_STRING,
+            required=False
+        ),
+        openapi.Parameter(
+            'category',
+            openapi.IN_FORM,
+            type=openapi.TYPE_STRING,
+            required=False
+        ),
+        openapi.Parameter(
+            'price',
+            openapi.IN_FORM,
+            type=openapi.TYPE_NUMBER,
+            required=False
+        ),
+        openapi.Parameter(
+            'stock',
+            openapi.IN_FORM,
+            type=openapi.TYPE_INTEGER,
+            required=False
+        ),
+        openapi.Parameter(
+            'description',
+            openapi.IN_FORM,
+            type=openapi.TYPE_STRING,
+            required=False
+        ),
+        openapi.Parameter(
+            'image1',
+            openapi.IN_FORM,
+            type=openapi.TYPE_FILE,
+            required=False
+        ),
+        openapi.Parameter(
+            'image2',
+            openapi.IN_FORM,
+            type=openapi.TYPE_FILE,
+            required=False
+        ),
+        openapi.Parameter(
+            'image3',
+            openapi.IN_FORM,
+            type=openapi.TYPE_FILE,
+            required=False
+        ),
+    ],
+    consumes=['multipart/form-data']
 )
-
 @api_view(['PUT'])
+@parser_classes([MultiPartParser, FormParser])
 def update_pot_api(request, id):
 
-    pot = Pot.objects.get(id=id)
+    pot = get_object_or_404(Pot, id=id)
+
+    pot_data = {
+        'name': request.data.get('name', pot.name),
+        'category': request.data.get('category', pot.category),
+        'price': request.data.get('price', pot.price),
+        'stock': request.data.get('stock', pot.stock),
+        'description': request.data.get(
+            'description',
+            pot.description
+        ),
+    }
 
     serializer = PotSerializer(
         pot,
-        data=request.data,
-        partial=True
+        data=pot_data,
+        partial=True,
+        context={'request': request}
     )
 
-    if serializer.is_valid():
-
-        serializer.save()
+    if not serializer.is_valid():
 
         return Response({
-            "status": "success",
-            "code": 200,
-            "message": "Pot updated successfully",
-            "data": serializer.data
-        })
+            "status": "failed",
+            "code": 400,
+            "message": "Pot update failed",
+            "errors": serializer.errors
+        }, status=status.HTTP_400_BAD_REQUEST)
+
+    pot = serializer.save()
+
+    # If new images are sent, replace old images
+    new_images = []
+
+    for field in ['image1', 'image2', 'image3']:
+
+        image = request.FILES.get(field)
+
+        if image:
+            new_images.append(image)
+
+    if new_images:
+
+        # Delete old images
+        pot.pot_images.all().delete()
+
+        # Save new images
+        for image in new_images:
+
+            PotImage.objects.create(
+                pot=pot,
+                image=image
+            )
 
     return Response({
-        "status": "failed",
-        "code": 400,
-        "errors": serializer.errors
+        "status": "success",
+        "code": 200,
+        "message": "Pot updated successfully",
+        "data": PotSerializer(
+            pot,
+            context={'request': request}
+        ).data
     })
+
 
 @swagger_auto_schema(
     method='delete',
-    tags=['Pots'])
-
+    tags=['Pots']
+)
 @api_view(['DELETE'])
 def delete_pot_api(request, id):
 
-    pot = Pot.objects.get(id=id)
+    pot = get_object_or_404(Pot, id=id)
 
     pot.delete()
 
@@ -743,11 +948,21 @@ from .serializers import FertilizerSerializer
 
 from drf_yasg.utils import swagger_auto_schema
 class FertilizerListView(APIView):
+
     permission_classes = [AllowAny]
 
+    @swagger_auto_schema(
+        tags=['fertilizer']
+    )
     def get(self, request):
+
         fertilizers = Fertilizer.objects.all()
-        serializer = FertilizerSerializer(fertilizers, many=True)
+
+        serializer = FertilizerSerializer(
+            fertilizers,
+            many=True,
+            context={'request': request}
+        )
 
         return Response({
             "status": "success",
@@ -760,66 +975,276 @@ class FertilizerListView(APIView):
 class FertilizerAddView(APIView):
 
     @swagger_auto_schema(
-        request_body=FertilizerSerializer,
-        tags=['fertilizer']
+        tags=['fertilizer'],
+        manual_parameters=[
+            openapi.Parameter(
+                'name',
+                openapi.IN_FORM,
+                type=openapi.TYPE_STRING,
+                required=True
+            ),
+            openapi.Parameter(
+                'price',
+                openapi.IN_FORM,
+                type=openapi.TYPE_NUMBER,
+                required=True
+            ),
+            openapi.Parameter(
+                'quantity',
+                openapi.IN_FORM,
+                type=openapi.TYPE_INTEGER,
+                required=True
+            ),
+            openapi.Parameter(
+                'description',
+                openapi.IN_FORM,
+                type=openapi.TYPE_STRING,
+                required=False
+            ),
+            openapi.Parameter(
+                'image1',
+                openapi.IN_FORM,
+                type=openapi.TYPE_FILE,
+                required=True
+            ),
+            openapi.Parameter(
+                'image2',
+                openapi.IN_FORM,
+                type=openapi.TYPE_FILE,
+                required=False
+            ),
+            openapi.Parameter(
+                'image3',
+                openapi.IN_FORM,
+                type=openapi.TYPE_FILE,
+                required=False
+            ),
+        ],
+        consumes=['multipart/form-data']
     )
     def post(self, request):
-        serializer = FertilizerSerializer(data=request.data)
 
-        if serializer.is_valid():
-            serializer.save()
+        fertilizer_data = {
+            'name': request.data.get('name'),
+            'price': request.data.get('price'),
+            'quantity': request.data.get('quantity'),
+            'description': request.data.get('description'),
+        }
+
+        serializer = FertilizerSerializer(
+            data=fertilizer_data,
+            context={'request': request}
+        )
+
+        if not serializer.is_valid():
 
             return Response({
-                "status": "success",
-                "code": 201,
-                "message": "Fertilizer added successfully",
-                "data": serializer.data
-            })
+                "status": "failed",
+                "code": 400,
+                "message": "Fertilizer addition failed",
+                "errors": serializer.errors
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+        fertilizer = serializer.save()
+
+        # Get images
+        images = []
+
+        image1 = request.FILES.get('image1')
+        image2 = request.FILES.get('image2')
+        image3 = request.FILES.get('image3')
+
+        if image1:
+            images.append(image1)
+
+        if image2:
+            images.append(image2)
+
+        if image3:
+            images.append(image3)
+
+        # At least one image
+        if len(images) == 0:
+
+            fertilizer.delete()
+
+            return Response({
+                "status": "failed",
+                "code": 400,
+                "message": "At least one image is required"
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+        # Maximum 3 images
+        if len(images) > 3:
+
+            fertilizer.delete()
+
+            return Response({
+                "status": "failed",
+                "code": 400,
+                "message": "Maximum 3 images are allowed"
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+        # Save images
+        for image in images:
+
+            FertilizerImage.objects.create(
+                fertilizer=fertilizer,
+                image=image
+            )
 
         return Response({
-            "status": "failed",
-            "code": 400,
-            "errors": serializer.errors
-        })
+            "status": "success",
+            "code": 201,
+            "message": "Fertilizer added successfully",
+            "data": FertilizerSerializer(
+                fertilizer,
+                context={'request': request}
+            ).data
+        }, status=status.HTTP_201_CREATED)
 
 
 class FertilizerUpdateView(APIView):
 
     @swagger_auto_schema(
-        request_body=FertilizerSerializer,
-        tags=['fertilizer']
+        tags=['fertilizer'],
+        manual_parameters=[
+            openapi.Parameter(
+                'name',
+                openapi.IN_FORM,
+                type=openapi.TYPE_STRING,
+                required=False
+            ),
+            openapi.Parameter(
+                'price',
+                openapi.IN_FORM,
+                type=openapi.TYPE_NUMBER,
+                required=False
+            ),
+            openapi.Parameter(
+                'quantity',
+                openapi.IN_FORM,
+                type=openapi.TYPE_INTEGER,
+                required=False
+            ),
+            openapi.Parameter(
+                'description',
+                openapi.IN_FORM,
+                type=openapi.TYPE_STRING,
+                required=False
+            ),
+            openapi.Parameter(
+                'image1',
+                openapi.IN_FORM,
+                type=openapi.TYPE_FILE,
+                required=False
+            ),
+            openapi.Parameter(
+                'image2',
+                openapi.IN_FORM,
+                type=openapi.TYPE_FILE,
+                required=False
+            ),
+            openapi.Parameter(
+                'image3',
+                openapi.IN_FORM,
+                type=openapi.TYPE_FILE,
+                required=False
+            ),
+        ],
+        consumes=['multipart/form-data']
     )
     def put(self, request, id):
-        fert = get_object_or_404(Fertilizer, id=id)
 
-        serializer = FertilizerSerializer(
-            fert,
-            data=request.data
+        fertilizer = get_object_or_404(
+            Fertilizer,
+            id=id
         )
 
-        if serializer.is_valid():
-            serializer.save()
+        fertilizer_data = {
+            'name': request.data.get(
+                'name',
+                fertilizer.name
+            ),
+            'price': request.data.get(
+                'price',
+                fertilizer.price
+            ),
+            'quantity': request.data.get(
+                'quantity',
+                fertilizer.quantity
+            ),
+            'description': request.data.get(
+                'description',
+                fertilizer.description
+            ),
+        }
+
+        serializer = FertilizerSerializer(
+            fertilizer,
+            data=fertilizer_data,
+            partial=True,
+            context={'request': request}
+        )
+
+        if not serializer.is_valid():
 
             return Response({
-                "status": "success",
-                "code": 200,
-                "message": "Fertilizer updated successfully",
-                "data": serializer.data
-            })
+                "status": "failed",
+                "code": 400,
+                "message": "Fertilizer update failed",
+                "errors": serializer.errors
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+        fertilizer = serializer.save()
+
+        # Check whether new images were uploaded
+        new_images = []
+
+        for field in ['image1', 'image2', 'image3']:
+
+            image = request.FILES.get(field)
+
+            if image:
+                new_images.append(image)
+
+        if new_images:
+
+            # Remove old images
+            fertilizer.fertilizer_images.all().delete()
+
+            # Save new images
+            for image in new_images:
+
+                FertilizerImage.objects.create(
+                    fertilizer=fertilizer,
+                    image=image
+                )
 
         return Response({
-            "status": "failed",
-            "code": 400,
-            "errors": serializer.errors
+            "status": "success",
+            "code": 200,
+            "message": "Fertilizer updated successfully",
+            "data": FertilizerSerializer(
+                fertilizer,
+                context={'request': request}
+            ).data
         })
 
 
 class FertilizerDeleteView(APIView):
 
+    @swagger_auto_schema(
+        tags=['fertilizer']
+    )
     def delete(self, request, id):
-        fert = get_object_or_404(Fertilizer, id=id)
 
-        fert.delete()
+        fertilizer = get_object_or_404(
+            Fertilizer,
+            id=id
+        )
+
+        fertilizer.delete()
 
         return Response({
             "status": "success",

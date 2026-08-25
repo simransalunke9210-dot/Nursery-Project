@@ -93,26 +93,55 @@ class OrderItem(models.Model):
         self.price = self.plant.price * self.quantity
         super().save(*args, **kwargs)   
 
+
 class Pot(models.Model):
     name = models.CharField(max_length=100)
     category = models.CharField(max_length=100)
     price = models.DecimalField(max_digits=10, decimal_places=2)
     stock = models.IntegerField()
     description = models.TextField()
-    image = models.ImageField(upload_to='pots/', null=True, blank=True)    
 
     def __str__(self):
-        return self.name   
+        return self.name
+
+
+class PotImage(models.Model):
+    pot = models.ForeignKey(
+        Pot,
+        on_delete=models.CASCADE,
+        related_name='pot_images'
+    )
+    image = models.ImageField(upload_to='pots/')
+
+    def __str__(self):
+        return f"{self.pot.name} Image"
+
 
 class Fertilizer(models.Model):
     name = models.CharField(max_length=100)
     price = models.DecimalField(max_digits=10, decimal_places=2)
     quantity = models.IntegerField()
-    description = models.TextField(blank=True, null=True)
-    image = models.ImageField(upload_to='fertilizers/', null=True, blank=True)
+    description = models.TextField(
+        blank=True,
+        null=True
+    )
 
     def __str__(self):
-        return self.name  
+        return self.name
+
+
+class FertilizerImage(models.Model):
+    fertilizer = models.ForeignKey(
+        Fertilizer,
+        on_delete=models.CASCADE,
+        related_name='fertilizer_images'
+    )
+    image = models.ImageField(upload_to='fertilizers/')
+
+    def __str__(self):
+        return f"{self.fertilizer.name} Image"
+
+  
 class Admin(models.Model):
     name = models.CharField(max_length=100)
     email = models.EmailField(unique=True)
