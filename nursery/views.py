@@ -86,6 +86,7 @@ def delete_plant(request, id):
     tags=['plant']
 )
 @api_view(['GET'])
+@permission_classes([AllowAny])
 def get_plants(request):
 
     plants = Plant.objects.all()
@@ -354,6 +355,7 @@ def delete_pot(request, id):
 
 )
 @api_view(['GET'])
+@permission_classes([AllowAny])
 def get_pots(request):
 
     pots = Pot.objects.all()
@@ -741,6 +743,7 @@ from .serializers import FertilizerSerializer
 
 from drf_yasg.utils import swagger_auto_schema
 class FertilizerListView(APIView):
+    permission_classes = [AllowAny]
 
     def get(self, request):
         fertilizers = Fertilizer.objects.all()
