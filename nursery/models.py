@@ -84,14 +84,46 @@ class Order(models.Model):
 
 
 class OrderItem(models.Model):
-    order = models.ForeignKey(Order, on_delete=models.CASCADE)
-    plant = models.ForeignKey(Plant, on_delete=models.CASCADE)
-    quantity = models.IntegerField()
-    price = models.FloatField()
+    order = models.ForeignKey(
+        Order,
+        on_delete=models.CASCADE,
+        related_name='items'
+    )
+    plant = models.ForeignKey(
+        Plant,
+        on_delete=models.CASCADE
+    )
+    quantity = models.PositiveIntegerField()
+    price = models.FloatField(default=0)
 
     def save(self, *args, **kwargs):
-        self.price = self.plant.price * self.quantity
-        super().save(*args, **kwargs)   
+        # ALWAYS get price from database
+        self.price = float(self.plant.price) * self.quantity
+
+        super().save(*args, **kwargs)
+
+        # Recalculate complete order total
+        total = sum(
+            item.price
+            for item in self.order.items.all()
+        )
+
+        self.order.total_amount = total
+        self.order.save(update_fields=['total_amount'])
+
+    def delete(self, *args, **kwargs):
+        order = self.order
+
+        super().delete(*args, **kwargs)
+
+        # Recalculate total after deleting item
+        total = sum(
+            item.price
+            for item in order.items.all()
+        )
+
+        order.total_amount = total
+        order.save(update_fields=['total_amount'])   
 
 
 class Pot(models.Model):

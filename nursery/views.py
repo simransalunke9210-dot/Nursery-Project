@@ -1,7 +1,7 @@
 from django.shortcuts import render, redirect, get_object_or_404
 from .models import Plant, Pot, Customer, Order, OrderItem, Fertilizer, Admin, PlantImage, PotImage, FertilizerImage, OrderRating,Settings
 from .forms import PlantForm, PotForm
-
+from .permissions import IsAdminUser
 from django.contrib.auth import authenticate
 from .models import UserProfile
 
@@ -165,6 +165,7 @@ def get_plants(request):
     tags=['plant']
 )
 @api_view(['POST'])
+@permission_classes([IsAdminUser])
 @parser_classes([MultiPartParser, FormParser])
 def add_plant_api(request):
 
@@ -266,6 +267,7 @@ def add_plant_api(request):
     }, status=status.HTTP_201_CREATED)
 
 @api_view(['PUT'])
+@permission_classes([IsAdminUser])
 @swagger_auto_schema(
     request_body=PlantSerializer,
     tags=['plant']
@@ -300,6 +302,7 @@ def update_plant_api(request, id):
 
 
 @api_view(['DELETE'])
+@permission_classes([IsAdminUser])
 @swagger_auto_schema(
     tags=['plant']
 )
@@ -429,6 +432,7 @@ def get_pots(request):
     consumes=['multipart/form-data']
 )
 @api_view(['POST'])
+@permission_classes([IsAdminUser])
 @parser_classes([MultiPartParser, FormParser])
 def add_pot_api(request):
 
@@ -569,6 +573,7 @@ def add_pot_api(request):
     consumes=['multipart/form-data']
 )
 @api_view(['PUT'])
+@permission_classes([IsAdminUser])
 @parser_classes([MultiPartParser, FormParser])
 def update_pot_api(request, id):
 
@@ -642,6 +647,7 @@ def update_pot_api(request, id):
     tags=['Pots']
 )
 @api_view(['DELETE'])
+@permission_classes([IsAdminUser])
 def delete_pot_api(request, id):
 
     pot = get_object_or_404(Pot, id=id)
@@ -773,27 +779,35 @@ def get_orders(request):
     tags=['Orders'],
     request_body=OrderSerializer
 )
+
 @api_view(['POST'])
 def add_order_api(request):
 
-    serializer = OrderSerializer(data=request.data)
+    data = request.data.copy()
+
+    # Ignore total_amount sent by frontend
+    data.pop('total_amount', None)
+
+    serializer = OrderSerializer(data=data)
 
     if serializer.is_valid():
 
-        serializer.save()
+        order = serializer.save(
+            total_amount=0
+        )
 
         return Response({
             "status": "success",
-            "code": 200,
+            "code": 201,
             "message": "Order added successfully",
-            "data": serializer.data
-        })
+            "data": OrderSerializer(order).data
+        }, status=201)
 
     return Response({
         "status": "failed",
         "code": 400,
         "errors": serializer.errors
-    })
+    }, status=400)
 
 @swagger_auto_schema(
     method='put',
@@ -866,8 +880,8 @@ def get_order_items(request):
 
 @swagger_auto_schema(
     method='post',
-    tags=['order_items'],
-    request_body=OrderItemSerializer
+    request_body=OrderItemSerializer,
+    tags=['Order Items']
 )
 @api_view(['POST'])
 def add_order_item_api(request):
@@ -876,20 +890,21 @@ def add_order_item_api(request):
 
     if serializer.is_valid():
 
-        serializer.save()
+        order_item = serializer.save()
 
         return Response({
             "status": "success",
-            "code": 200,
+            "code": 201,
             "message": "Order item added successfully",
-            "data": serializer.data
-        })
+            "data": OrderItemSerializer(order_item).data,
+            "order_total": order_item.order.total_amount
+        }, status=201)
 
     return Response({
         "status": "failed",
         "code": 400,
         "errors": serializer.errors
-    })
+    }, status=400)
 
 @swagger_auto_schema(
     method='put',
@@ -973,6 +988,7 @@ class FertilizerListView(APIView):
 
 
 class FertilizerAddView(APIView):
+    @permission_classes([IsAdminUser])
 
     @swagger_auto_schema(
         tags=['fertilizer'],
@@ -1105,6 +1121,7 @@ class FertilizerAddView(APIView):
 
 
 class FertilizerUpdateView(APIView):
+    @permission_classes([IsAdminUser])
 
     @swagger_auto_schema(
         tags=['fertilizer'],
@@ -1233,6 +1250,7 @@ class FertilizerUpdateView(APIView):
 
 
 class FertilizerDeleteView(APIView):
+    @permission_classes([IsAdminUser])
 
     @swagger_auto_schema(
         tags=['fertilizer']
