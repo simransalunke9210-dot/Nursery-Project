@@ -27,7 +27,7 @@ SECRET_KEY = 'django-insecure-a!jr&x&_#q@f1__0$k0@1=nq_g(h=4$7m5fl&!6wl!zitdp!(=
 import os
 from datetime import timedelta
 
-DEBUG = config("DEBUG", default=False, cast=bool)
+DEBUG = os.environ.get("DEBUG", "False") == "True"
 
 ALLOWED_HOSTS = os.environ.get(
     "ALLOWED_HOSTS",
