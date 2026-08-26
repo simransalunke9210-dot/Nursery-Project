@@ -90,8 +90,9 @@ WSGI_APPLICATION = 'nursery_project.wsgi.application'
 # https://docs.djangoproject.com/en/6.0/ref/settings/#databases
 
 import dj_database_url
+from decouple import config
 
-DATABASE_URL = os.environ.get("DATABASE_URL")
+DATABASE_URL = config("DATABASE_URL", default=None)
 
 if DATABASE_URL:
     DATABASES = {
