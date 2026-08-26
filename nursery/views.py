@@ -4,6 +4,7 @@ from .forms import PlantForm, PotForm
 from .permissions import IsAdminUser
 from django.contrib.auth import authenticate
 from .models import UserProfile
+from django.db import transaction
 
 from django.http import HttpResponse
 from django.shortcuts import get_object_or_404
@@ -685,6 +686,7 @@ def get_customers(request):
     request_body=CustomerSerializer
 )
 @api_view(['POST'])
+@permission_classes([IsAdminUser])
 def add_customer_api(request):
 
     serializer = CustomerSerializer(data=request.data)
@@ -1482,26 +1484,53 @@ class UserView(APIView):
 )
 @api_view(['POST'])
 @permission_classes([AllowAny])
+@transaction.atomic
 def register_user(request):
 
     serializer = UserSerializer(data=request.data)
 
     if serializer.is_valid():
 
-        serializer.save()
+        # Create Django User
+        user = serializer.save()
+
+        # Get mobile number from registration request
+        mobile = request.data.get("mobile", "")
+
+        # Automatically create UserProfile
+        UserProfile.objects.create(
+            user=user,
+            mobile=mobile,
+            role='Customer'
+        )
+
+        # Automatically create Customer
+        Customer.objects.create(
+            name=user.username,
+            phone=mobile,
+            email=user.email,
+            role='Customer'
+        )
 
         return Response({
             "status": "success",
             "code": 201,
             "message": "User registered successfully",
-            "data": serializer.data
-        })
+            "data": {
+                "id": user.id,
+                "username": user.username,
+                "email": user.email,
+                "mobile": mobile,
+                "role": "Customer"
+            }
+        }, status=status.HTTP_201_CREATED)
 
     return Response({
         "status": "failed",
         "code": 400,
         "errors": serializer.errors
-    })
+    }, status=status.HTTP_400_BAD_REQUEST)
+
 
 @swagger_auto_schema(
     method='put',
@@ -2787,7 +2816,7 @@ class ReportsView(APIView):
         })
 
 class SettingsView(APIView):
-    permission_classes = [IsAdminUser]
+    permission_classes = [AllowAny]
 
     @swagger_auto_schema(
         tags=['settings']

@@ -160,7 +160,6 @@ class AdminLoginSerializer(serializers.Serializer):
 
 class UserSerializer(serializers.ModelSerializer):
     mobile = serializers.CharField(write_only=True)
-    role = serializers.CharField(write_only=True)
 
     class Meta:
         model = User
@@ -171,23 +170,32 @@ class UserSerializer(serializers.ModelSerializer):
             'last_name',
             'email',
             'password',
-            'mobile',
-            'role'
+            'mobile'
         ]
         extra_kwargs = {
             'password': {'write_only': True}
         }
 
     def create(self, validated_data):
-        mobile = validated_data.pop('mobile')
-        role = validated_data.pop('role')
 
+        mobile = validated_data.pop('mobile')
+
+        # Always create normal customer account
         user = User.objects.create_user(**validated_data)
 
         UserProfile.objects.create(
             user=user,
             mobile=mobile,
-            role=role
+            role='Customer'
+        )
+
+        Customer.objects.create(
+            name=(
+                f"{user.first_name} {user.last_name}"
+            ).strip() or user.username,
+            phone=mobile,
+            email=user.email,
+            role='Customer'
         )
 
         return user
