@@ -776,6 +776,7 @@ def get_orders(request):
         "data": serializer.data
     })
 
+
 @swagger_auto_schema(
     method='post',
     tags=['Orders'],
@@ -785,21 +786,34 @@ def get_orders(request):
 @permission_classes([IsAuthenticated])
 def add_order_api(request):
 
-    try:
-        customer = request.user.customer
-    except Customer.DoesNotExist:
-        return Response(
-            {
-                "status": "failed",
-                "code": 400,
-                "message": "Customer profile not found for this user."
-            },
-            status=status.HTTP_400_BAD_REQUEST
+    user = request.user
+
+    # Find Customer using the logged-in Django user's email
+    customer = Customer.objects.filter(
+        email__iexact=user.email
+    ).first()
+
+    # If Customer does not exist, create one automatically
+    if not customer:
+
+        mobile = ''
+
+        # Get mobile from UserProfile if available
+        try:
+            mobile = user.userprofile.mobile
+        except UserProfile.DoesNotExist:
+            mobile = ''
+
+        customer = Customer.objects.create(
+            name=user.get_full_name() or user.username,
+            phone=mobile,
+            email=user.email,
+            role='Customer'
         )
 
     data = request.data.copy()
 
-    # Never trust customer ID or total amount from frontend
+    # Never accept customer or total_amount from frontend
     data.pop('customer', None)
     data.pop('total_amount', None)
 
@@ -1496,75 +1510,53 @@ class UserView(APIView):
             "message": "All users fetched successfully",
             "data": serializer.data
         })
-
     
 @swagger_auto_schema(
     method='post',
-    tags=['Orders'],
-    request_body=OrderSerializer
+    request_body=UserSerializer,
+    tags=['Users']
 )
 @api_view(['POST'])
-@permission_classes([IsAuthenticated])
-def add_order_api(request):
+@permission_classes([AllowAny])
+def register_user(request):
 
-    user = request.user
-
-    # Find Customer using the logged-in Django user's email
-    customer = Customer.objects.filter(
-        email__iexact=user.email
-    ).first()
-
-    # If Customer does not exist, create one automatically
-    if not customer:
-
-        mobile = ''
-
-        # Get mobile from UserProfile if available
-        try:
-            mobile = user.userprofile.mobile
-        except UserProfile.DoesNotExist:
-            mobile = ''
-
-        customer = Customer.objects.create(
-            name=user.get_full_name() or user.username,
-            phone=mobile,
-            email=user.email,
-            role='Customer'
-        )
-
-    data = request.data.copy()
-
-    # Never accept customer or total_amount from frontend
-    data.pop('customer', None)
-    data.pop('total_amount', None)
-
-    serializer = OrderSerializer(data=data)
+    serializer = UserSerializer(data=request.data)
 
     if serializer.is_valid():
 
-        order = serializer.save(
-            customer=customer,
-            total_amount=0
-        )
+        try:
 
-        return Response(
-            {
+            user = serializer.save()
+
+            return Response({
                 "status": "success",
-                "code": 201,
-                "message": "Order added successfully",
-                "data": OrderSerializer(order).data
-            },
-            status=status.HTTP_201_CREATED
-        )
+                "message": "User registered successfully",
 
-    return Response(
-        {
-            "status": "failed",
-            "code": 400,
-            "errors": serializer.errors
-        },
-        status=status.HTTP_400_BAD_REQUEST
-    )
+                "data": {
+                    "id": user.id,
+                    "username": user.username,
+                    "first_name": user.first_name,
+                    "last_name": user.last_name,
+                    "email": user.email
+                }
+
+            }, status=status.HTTP_201_CREATED)
+
+        except Exception as e:
+
+            return Response({
+                "status": "failed",
+                "message": "Failed to create account",
+                "error": str(e)
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+    return Response({
+
+        "status": "failed",
+        "message": "Registration failed",
+        "errors": serializer.errors
+
+    }, status=status.HTTP_400_BAD_REQUEST)
 
 
 from .serializers import ProfileUpdateSerializer
