@@ -29,6 +29,14 @@ class PlantImage(models.Model):
         return f"{self.plant.name} Image"
 
 class Customer(models.Model):
+    user = models.OneToOneField(
+        User,
+        on_delete=models.CASCADE,
+        related_name='customer',
+        null=True,
+        blank=True
+    )
+
     name = models.CharField(max_length=100)
     phone = models.CharField(max_length=15)
     email = models.EmailField(blank=True, null=True)

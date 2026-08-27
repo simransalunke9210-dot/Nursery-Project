@@ -781,13 +781,26 @@ def get_orders(request):
     tags=['Orders'],
     request_body=OrderSerializer
 )
-
 @api_view(['POST'])
+@permission_classes([IsAuthenticated])
 def add_order_api(request):
+
+    try:
+        customer = request.user.customer
+    except Customer.DoesNotExist:
+        return Response(
+            {
+                "status": "failed",
+                "code": 400,
+                "message": "Customer profile not found for this user."
+            },
+            status=status.HTTP_400_BAD_REQUEST
+        )
 
     data = request.data.copy()
 
-    # Ignore total_amount sent by frontend
+    # Never trust customer ID or total amount from frontend
+    data.pop('customer', None)
     data.pop('total_amount', None)
 
     serializer = OrderSerializer(data=data)
@@ -795,21 +808,28 @@ def add_order_api(request):
     if serializer.is_valid():
 
         order = serializer.save(
+            customer=customer,
             total_amount=0
         )
 
-        return Response({
-            "status": "success",
-            "code": 201,
-            "message": "Order added successfully",
-            "data": OrderSerializer(order).data
-        }, status=201)
+        return Response(
+            {
+                "status": "success",
+                "code": 201,
+                "message": "Order added successfully",
+                "data": OrderSerializer(order).data
+            },
+            status=status.HTTP_201_CREATED
+        )
 
-    return Response({
-        "status": "failed",
-        "code": 400,
-        "errors": serializer.errors
-    }, status=400)
+    return Response(
+        {
+            "status": "failed",
+            "code": 400,
+            "errors": serializer.errors
+        },
+        status=status.HTTP_400_BAD_REQUEST
+    )
 
 @swagger_auto_schema(
     method='put',
@@ -1525,36 +1545,63 @@ def register_user(request):
     }, status=status.HTTP_400_BAD_REQUEST)
 
 
+from .serializers import ProfileUpdateSerializer
+
 @swagger_auto_schema(
     method='put',
-    request_body=UserSerializer,
+    request_body=ProfileUpdateSerializer,
     tags=['users']
 )
 @api_view(['PUT'])
+@permission_classes([IsAuthenticated])
 def update_user(request, id):
 
+    # Get user
     user = get_object_or_404(User, id=id)
 
-    serializer = UserSerializer(user, data=request.data, partial=True)
+    # User can update only their own profile
+    if request.user.id != user.id:
+        return Response(
+            {
+                "status": "failed",
+                "code": 403,
+                "message": "You can update only your own profile"
+            },
+            status=status.HTTP_403_FORBIDDEN
+        )
 
-    if serializer.is_valid():
-        serializer.save()
+    # Profile Update Serializer
+    serializer = ProfileUpdateSerializer(
+        instance=user,
+        data=request.data,
+        partial=True
+    )
 
-        profile = UserProfile.objects.get(user=user)
-        profile.mobile = request.data.get("mobile", profile.mobile)
-        profile.role = request.data.get("role", profile.role)
-        profile.save()
+    # Validate
+    if not serializer.is_valid():
+        return Response(
+            {
+                "status": "failed",
+                "code": 400,
+                "message": "Profile update failed",
+                "errors": serializer.errors
+            },
+            status=status.HTTP_400_BAD_REQUEST
+        )
 
-        return Response({
+    # Save
+    serializer.save()
+
+    # Success Response
+    return Response(
+        {
             "status": "success",
-            "message": "User updated successfully",
+            "code": 200,
+            "message": "User profile updated successfully",
             "data": serializer.data
-        })
-
-    return Response({
-        "status": "failed",
-        "errors": serializer.errors
-    }, status=400)
+        },
+        status=status.HTTP_200_OK
+    )
 
 
 @api_view(['DELETE'])

@@ -218,6 +218,95 @@ class UserSerializer(serializers.ModelSerializer):
 
         return user
 
+class ProfileUpdateSerializer(serializers.ModelSerializer):
+
+    mobile = serializers.CharField(required=False, allow_blank=True)
+
+    class Meta:
+        model = User
+
+        fields = [
+            'username',
+            'first_name',
+            'last_name',
+            'email',
+            'mobile'
+        ]
+
+    def validate_email(self, value):
+
+        user = self.instance
+
+        if User.objects.filter(
+            email=value
+        ).exclude(
+            id=user.id
+        ).exists():
+
+            raise serializers.ValidationError(
+                "Email is already registered."
+            )
+
+        return value
+
+    def validate_username(self, value):
+
+        user = self.instance
+
+        if User.objects.filter(
+            username=value
+        ).exclude(
+            id=user.id
+        ).exists():
+
+            raise serializers.ValidationError(
+                "Username is already registered."
+            )
+
+        return value
+
+    def update(self, instance, validated_data):
+
+        mobile = validated_data.pop(
+            'mobile',
+            None
+        )
+
+        # Update User fields
+        instance.username = validated_data.get(
+            'username',
+            instance.username
+        )
+
+        instance.first_name = validated_data.get(
+            'first_name',
+            instance.first_name
+        )
+
+        instance.last_name = validated_data.get(
+            'last_name',
+            instance.last_name
+        )
+
+        instance.email = validated_data.get(
+            'email',
+            instance.email
+        )
+
+        instance.save()
+
+        # Update UserProfile
+        if mobile is not None:
+
+            UserProfile.objects.update_or_create(
+                user=instance,
+                defaults={
+                    'mobile': mobile
+                }
+            )
+
+        return instance
+
 from rest_framework import serializers
 from .models import Cart, CartItem
 
@@ -263,7 +352,7 @@ class OrderItemSerializer(serializers.ModelSerializer):
 class OrderSerializer(serializers.ModelSerializer):
 
     items = OrderItemSerializer(
-        source='orderitem_set',
+        source='items',
         many=True,
         read_only=True
     )
@@ -277,6 +366,16 @@ class OrderSerializer(serializers.ModelSerializer):
             'total_amount',
             'status',
             'shipping_address',
+            'expected_delivery',
+            'items'
+        ]
+
+        read_only_fields = [
+            'id',
+            'customer',
+            'date',
+            'total_amount',
+            'status',
             'expected_delivery',
             'items'
         ]
