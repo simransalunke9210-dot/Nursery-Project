@@ -352,8 +352,11 @@ class OrderItemSerializer(serializers.ModelSerializer):
 class OrderSerializer(serializers.ModelSerializer):
 
     items = OrderItemSerializer(
-        source='items',
         many=True,
+        read_only=True
+    )
+
+    customer = serializers.PrimaryKeyRelatedField(
         read_only=True
     )
 
@@ -366,16 +369,6 @@ class OrderSerializer(serializers.ModelSerializer):
             'total_amount',
             'status',
             'shipping_address',
-            'expected_delivery',
-            'items'
-        ]
-
-        read_only_fields = [
-            'id',
-            'customer',
-            'date',
-            'total_amount',
-            'status',
             'expected_delivery',
             'items'
         ]

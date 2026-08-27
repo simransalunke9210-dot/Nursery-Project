@@ -786,64 +786,87 @@ def get_orders(request):
 @permission_classes([IsAuthenticated])
 def add_order_api(request):
 
-    user = request.user
+    try:
+        user = request.user
 
-    # Find Customer using the logged-in Django user's email
-    customer = Customer.objects.filter(
-        email__iexact=user.email
-    ).first()
+        # ---------------------------------
+        # Find Customer using logged-in user
+        # ---------------------------------
+        customer = Customer.objects.filter(
+            email__iexact=user.email
+        ).first()
 
-    # If Customer does not exist, create one automatically
-    if not customer:
+        # ---------------------------------
+        # If Customer does not exist,
+        # create Customer automatically
+        # ---------------------------------
+        if customer is None:
 
-        mobile = ''
+            mobile = ""
 
-        # Get mobile from UserProfile if available
-        try:
-            mobile = user.userprofile.mobile
-        except UserProfile.DoesNotExist:
-            mobile = ''
+            try:
+                if hasattr(user, 'userprofile'):
+                    mobile = user.userprofile.mobile or ""
+            except Exception:
+                mobile = ""
 
-        customer = Customer.objects.create(
-            name=user.get_full_name() or user.username,
-            phone=mobile,
-            email=user.email,
-            role='Customer'
-        )
+            customer = Customer.objects.create(
+                name=user.get_full_name() or user.username,
+                phone=mobile,
+                email=user.email,
+                role="Customer"
+            )
 
-    data = request.data.copy()
+        # ---------------------------------
+        # Prepare order data
+        # ---------------------------------
+        data = request.data.copy()
 
-    # Never accept customer or total_amount from frontend
-    data.pop('customer', None)
-    data.pop('total_amount', None)
+        # Frontend should not control these
+        data.pop('customer', None)
+        data.pop('total_amount', None)
+        data.pop('date', None)
+        data.pop('status', None)
+        data.pop('expected_delivery', None)
 
-    serializer = OrderSerializer(data=data)
+        # ---------------------------------
+        # Validate Order
+        # ---------------------------------
+        serializer = OrderSerializer(data=data)
 
-    if serializer.is_valid():
+        if not serializer.is_valid():
+            return Response({
+                "status": "failed",
+                "code": 400,
+                "errors": serializer.errors
+            }, status=status.HTTP_400_BAD_REQUEST)
 
+        # ---------------------------------
+        # Create Order
+        # ---------------------------------
         order = serializer.save(
             customer=customer,
             total_amount=0
         )
 
-        return Response(
-            {
-                "status": "success",
-                "code": 201,
-                "message": "Order added successfully",
-                "data": OrderSerializer(order).data
-            },
-            status=status.HTTP_201_CREATED
-        )
+        return Response({
+            "status": "success",
+            "code": 201,
+            "message": "Order added successfully",
+            "data": OrderSerializer(order).data
+        }, status=status.HTTP_201_CREATED)
 
-    return Response(
-        {
+    except Exception as e:
+
+        # IMPORTANT: return actual error instead
+        # of generic HTML 500
+        return Response({
             "status": "failed",
-            "code": 400,
-            "errors": serializer.errors
-        },
-        status=status.HTTP_400_BAD_REQUEST
-    )
+            "code": 500,
+            "message": "Order creation failed",
+            "error": str(e)
+        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
 
 @swagger_auto_schema(
     method='put',
