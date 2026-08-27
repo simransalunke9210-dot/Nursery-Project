@@ -1496,53 +1496,75 @@ class UserView(APIView):
             "message": "All users fetched successfully",
             "data": serializer.data
         })
+
     
 @swagger_auto_schema(
     method='post',
-    request_body=UserSerializer,
-    tags=['Users']
+    tags=['Orders'],
+    request_body=OrderSerializer
 )
 @api_view(['POST'])
-@permission_classes([AllowAny])
-def register_user(request):
+@permission_classes([IsAuthenticated])
+def add_order_api(request):
 
-    serializer = UserSerializer(data=request.data)
+    user = request.user
+
+    # Find Customer using the logged-in Django user's email
+    customer = Customer.objects.filter(
+        email__iexact=user.email
+    ).first()
+
+    # If Customer does not exist, create one automatically
+    if not customer:
+
+        mobile = ''
+
+        # Get mobile from UserProfile if available
+        try:
+            mobile = user.userprofile.mobile
+        except UserProfile.DoesNotExist:
+            mobile = ''
+
+        customer = Customer.objects.create(
+            name=user.get_full_name() or user.username,
+            phone=mobile,
+            email=user.email,
+            role='Customer'
+        )
+
+    data = request.data.copy()
+
+    # Never accept customer or total_amount from frontend
+    data.pop('customer', None)
+    data.pop('total_amount', None)
+
+    serializer = OrderSerializer(data=data)
 
     if serializer.is_valid():
 
-        try:
+        order = serializer.save(
+            customer=customer,
+            total_amount=0
+        )
 
-            user = serializer.save()
-
-            return Response({
+        return Response(
+            {
                 "status": "success",
-                "message": "User registered successfully",
+                "code": 201,
+                "message": "Order added successfully",
+                "data": OrderSerializer(order).data
+            },
+            status=status.HTTP_201_CREATED
+        )
 
-                "data": {
-                    "id": user.id,
-                    "username": user.username,
-                    "first_name": user.first_name,
-                    "last_name": user.last_name,
-                    "email": user.email
-                }
-
-            }, status=status.HTTP_201_CREATED)
-
-        except Exception as e:
-
-            return Response({
-                "status": "failed",
-                "message": "Failed to create account",
-                "error": str(e)
-            }, status=status.HTTP_400_BAD_REQUEST)
-
-    return Response({
-
-        "status": "failed",
-        "message": "Registration failed",
-        "errors": serializer.errors
-
-    }, status=status.HTTP_400_BAD_REQUEST)
+    return Response(
+        {
+            "status": "failed",
+            "code": 400,
+            "errors": serializer.errors
+        },
+        status=status.HTTP_400_BAD_REQUEST
+    )
 
 
 from .serializers import ProfileUpdateSerializer
