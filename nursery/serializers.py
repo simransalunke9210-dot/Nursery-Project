@@ -2,6 +2,7 @@ from rest_framework import serializers
 from .models import Plant, Pot, Customer, Order, OrderItem, Fertilizer, Admin, UserProfile, OrderRating,Settings
 from django.contrib.auth.models import User
 from .models import PlantImage, PotImage, FertilizerImage
+from .models import UserProfile
 
 class PlantImageSerializer(serializers.ModelSerializer):
 
@@ -158,29 +159,57 @@ class AdminLoginSerializer(serializers.Serializer):
     password = serializers.CharField()
     role = serializers.CharField()
 
+
 class UserSerializer(serializers.ModelSerializer):
+
     mobile = serializers.CharField(write_only=True)
 
     class Meta:
         model = User
+
         fields = [
-            'id',
             'username',
             'first_name',
             'last_name',
             'email',
             'password',
-            'mobile',
+            'mobile'
         ]
+
         extra_kwargs = {
-            'password': {'write_only': True}
+            'password': {
+                'write_only': True
+            }
         }
 
+    def validate_email(self, value):
+
+        if User.objects.filter(email=value).exists():
+            raise serializers.ValidationError(
+                "Email is already registered."
+            )
+
+        return value
+
+    def validate_username(self, value):
+
+        if User.objects.filter(username=value).exists():
+            raise serializers.ValidationError(
+                "Username is already registered."
+            )
+
+        return value
+
     def create(self, validated_data):
+
         mobile = validated_data.pop('mobile')
 
-        user = User.objects.create_user(**validated_data)
+        # Create Django User
+        user = User.objects.create_user(
+            **validated_data
+        )
 
+        # Create User Profile
         UserProfile.objects.create(
             user=user,
             mobile=mobile,

@@ -1480,55 +1480,48 @@ class UserView(APIView):
 @swagger_auto_schema(
     method='post',
     request_body=UserSerializer,
-    tags=['users']
+    tags=['Users']
 )
 @api_view(['POST'])
 @permission_classes([AllowAny])
-@transaction.atomic
 def register_user(request):
 
     serializer = UserSerializer(data=request.data)
 
     if serializer.is_valid():
 
-        # Create Django User
-        user = serializer.save()
+        try:
 
-        # Get mobile number from registration request
-        mobile = request.data.get("mobile", "")
+            user = serializer.save()
 
-        # Automatically create UserProfile
-        UserProfile.objects.create(
-            user=user,
-            mobile=mobile,
-            role='Customer'
-        )
+            return Response({
+                "status": "success",
+                "message": "User registered successfully",
 
-        # Automatically create Customer
-        Customer.objects.create(
-            name=user.username,
-            phone=mobile,
-            email=user.email,
-            role='Customer'
-        )
+                "data": {
+                    "id": user.id,
+                    "username": user.username,
+                    "first_name": user.first_name,
+                    "last_name": user.last_name,
+                    "email": user.email
+                }
 
-        return Response({
-            "status": "success",
-            "code": 201,
-            "message": "User registered successfully",
-            "data": {
-                "id": user.id,
-                "username": user.username,
-                "email": user.email,
-                "mobile": mobile,
-                "role": "Customer"
-            }
-        }, status=status.HTTP_201_CREATED)
+            }, status=status.HTTP_201_CREATED)
+
+        except Exception as e:
+
+            return Response({
+                "status": "failed",
+                "message": "Failed to create account",
+                "error": str(e)
+            }, status=status.HTTP_400_BAD_REQUEST)
 
     return Response({
+
         "status": "failed",
-        "code": 400,
+        "message": "Registration failed",
         "errors": serializer.errors
+
     }, status=status.HTTP_400_BAD_REQUEST)
 
 
@@ -1604,11 +1597,14 @@ def login(request):
     # -----------------------------------
 
     if not email or not password:
-        return Response({
-            "status": "failed",
-            "message": "Email and password are required"
-        }, status=status.HTTP_400_BAD_REQUEST)
 
+        return Response(
+            {
+                "status": "failed",
+                "message": "Email and password are required"
+            },
+            status=status.HTTP_400_BAD_REQUEST
+        )
 
     # -----------------------------------
     # ADMIN LOGIN
@@ -1623,52 +1619,45 @@ def login(request):
 
         # Find corresponding Django User
         try:
+
             admin_user = User.objects.get(
                 email=email
             )
 
         except User.DoesNotExist:
 
-            return Response({
-                "status": "failed",
-                "message": "Admin account is not linked with a Django User account"
-            }, status=status.HTTP_401_UNAUTHORIZED)
-
+            return Response(
+                {
+                    "status": "failed",
+                    "message": "Admin account is not linked with a Django User account"
+                },
+                status=status.HTTP_401_UNAUTHORIZED
+            )
 
         # Create JWT tokens
         refresh = RefreshToken.for_user(admin_user)
 
+        return Response(
+            {
+                "status": "success",
+                "message": "Admin Login Successful",
 
-        return Response({
+                "data": {
+                    "id": admin.id,
+                    "name": admin.name,
+                    "email": admin.email,
+                    "mobile": admin.mobile,
+                    "role": "Admin"
+                },
 
-            "status": "success",
-
-            "message": "Admin Login Successful",
-
-            "data": {
-
-                "id": admin.id,
-
-                "name": admin.name,
-
-                "email": admin.email,
-
-                "mobile": admin.mobile,
-
-                "role": "Admin"
-
+                "access": str(refresh.access_token),
+                "refresh": str(refresh)
             },
-
-            "access": str(refresh.access_token),
-
-            "refresh": str(refresh)
-
-        }, status=status.HTTP_200_OK)
-
+            status=status.HTTP_200_OK
+        )
 
     except Admin.DoesNotExist:
         pass
-
 
     # -----------------------------------
     # CUSTOMER / USER LOGIN
@@ -1682,78 +1671,76 @@ def login(request):
 
     except User.DoesNotExist:
 
-        return Response({
-            "status": "failed",
-            "message": "Invalid Email or Password"
-        }, status=status.HTTP_401_UNAUTHORIZED)
+        return Response(
+            {
+                "status": "failed",
+                "message": "Invalid Email or Password"
+            },
+            status=status.HTTP_401_UNAUTHORIZED
+        )
 
+    # -----------------------------------
+    # CHECK PASSWORD
+    # -----------------------------------
 
-    # Check password
-    user = authenticate(
+    authenticated_user = authenticate(
         username=user.username,
         password=password
     )
 
+    if authenticated_user is None:
 
-    if user is None:
-
-        return Response({
-            "status": "failed",
-            "message": "Invalid Email or Password"
-        }, status=status.HTTP_401_UNAUTHORIZED)
-
-
-    # -----------------------------------
-    # GET USER PROFILE
-    # -----------------------------------
-
-    try:
-
-        profile = UserProfile.objects.get(
-            user=user
+        return Response(
+            {
+                "status": "failed",
+                "message": "Invalid Email or Password"
+            },
+            status=status.HTTP_401_UNAUTHORIZED
         )
 
-    except UserProfile.DoesNotExist:
-
-        return Response({
-            "status": "failed",
-            "message": "User profile not found"
-        }, status=status.HTTP_400_BAD_REQUEST)
-
+    # Use authenticated user
+    user = authenticated_user
 
     # -----------------------------------
-    # CREATE JWT
+    # GET OR CREATE USER PROFILE
+    # -----------------------------------
+
+    profile, created = UserProfile.objects.get_or_create(
+        user=user,
+        defaults={
+            "mobile": "",
+            "role": "Customer"
+        }
+    )
+
+    # -----------------------------------
+    # CREATE JWT TOKENS
     # -----------------------------------
 
     refresh = RefreshToken.for_user(user)
 
+    # -----------------------------------
+    # SUCCESS RESPONSE
+    # -----------------------------------
 
-    return Response({
+    return Response(
+        {
+            "status": "success",
+            "message": "User Login Successful",
 
-        "status": "success",
+            "data": {
+                "id": user.id,
+                "username": user.username,
+                "email": user.email,
+                "mobile": profile.mobile,
+                "role": profile.role
+            },
 
-        "message": "User Login Successful",
-
-        "data": {
-
-            "id": user.id,
-
-            "username": user.username,
-
-            "email": user.email,
-
-            "mobile": profile.mobile,
-
-            "role": profile.role
-
+            "access": str(refresh.access_token),
+            "refresh": str(refresh)
         },
-
-        "access": str(refresh.access_token),
-
-        "refresh": str(refresh)
-
-    }, status=status.HTTP_200_OK)
-
+        status=status.HTTP_200_OK
+    )
 
 from rest_framework.decorators import api_view
 from rest_framework.response import Response
