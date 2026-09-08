@@ -26,6 +26,10 @@ from rest_framework_simplejwt.tokens import RefreshToken
 
 from rest_framework.permissions import BasePermission
 
+import razorpay
+from django.conf import settings
+from .models import Payment
+
 
 class IsAdminUser(BasePermission):
     message = "Only admin users can access this API."
@@ -2947,3 +2951,228 @@ class SettingsView(APIView):
             "message": "Settings update failed",
             "errors": serializer.errors
         }, status=status.HTTP_400_BAD_REQUEST)
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def create_razorpay_order(request):
+
+    try:
+
+        order_id = request.data.get('order_id')
+
+        if not order_id:
+            return Response({
+                "status": "failed",
+                "message": "order_id is required"
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+        # Get our Django order
+        order = get_object_or_404(
+            Order,
+            id=order_id
+        )
+
+        # Make sure order belongs to logged-in customer
+        customer = Customer.objects.filter(
+            email__iexact=request.user.email
+        ).first()
+
+        if not customer:
+            return Response({
+                "status": "failed",
+                "message": "Customer profile not found"
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+        if order.customer_id != customer.id:
+            return Response({
+                "status": "failed",
+                "message": "You are not allowed to pay for this order"
+            }, status=status.HTTP_403_FORBIDDEN)
+
+        # Amount from database
+        amount = float(order.total_amount)
+
+        if amount <= 0:
+            return Response({
+                "status": "failed",
+                "message": "Order amount must be greater than zero"
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+        # Razorpay amount is in PAISE
+        amount_paise = int(round(amount * 100))
+
+        # Razorpay client
+        client = razorpay.Client(
+            auth=(
+                settings.RAZORPAY_KEY_ID,
+                settings.RAZORPAY_KEY_SECRET
+            )
+        )
+
+        # Create Razorpay order
+        razorpay_order = client.order.create({
+            "amount": amount_paise,
+            "currency": "INR",
+            "receipt": f"order_{order.id}",
+            "notes": {
+                "django_order_id": str(order.id),
+                "customer_email": request.user.email
+            }
+        })
+
+        # Save payment information
+        payment = Payment.objects.create(
+            order=order,
+            razorpay_order_id=razorpay_order['id'],
+            amount=amount,
+            status='CREATED'
+        )
+
+        return Response({
+            "status": "success",
+            "message": "Razorpay order created successfully",
+            "data": {
+                "payment_id": payment.id,
+                "django_order_id": order.id,
+                "razorpay_order_id": razorpay_order['id'],
+                "amount": amount_paise,
+                "currency": "INR",
+                "razorpay_key_id": settings.RAZORPAY_KEY_ID
+            }
+        }, status=status.HTTP_201_CREATED)
+
+    except Exception as e:
+
+        return Response({
+            "status": "failed",
+            "message": "Unable to create Razorpay order",
+            "error": str(e)
+        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def verify_razorpay_payment(request):
+
+    try:
+        order_id = request.data.get('order_id')
+        razorpay_payment_id = request.data.get('razorpay_payment_id')
+        razorpay_signature = request.data.get('razorpay_signature')
+
+        # Check required fields
+        if not order_id:
+            return Response({
+                "status": "failed",
+                "message": "order_id is required"
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+        if not razorpay_payment_id:
+            return Response({
+                "status": "failed",
+                "message": "razorpay_payment_id is required"
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+        if not razorpay_signature:
+            return Response({
+                "status": "failed",
+                "message": "razorpay_signature is required"
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+        # Get Django order
+        order = get_object_or_404(
+            Order,
+            id=order_id
+        )
+
+        # Make sure order belongs to logged-in customer
+        customer = Customer.objects.filter(
+            email__iexact=request.user.email
+        ).first()
+
+        if not customer:
+            return Response({
+                "status": "failed",
+                "message": "Customer profile not found"
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+        if order.customer_id != customer.id:
+            return Response({
+                "status": "failed",
+                "message": "You are not allowed to verify payment for this order"
+            }, status=status.HTTP_403_FORBIDDEN)
+
+        # Get payment record created earlier
+        payment = Payment.objects.filter(
+            order=order
+        ).first()
+
+        if not payment:
+            return Response({
+                "status": "failed",
+                "message": "Payment record not found"
+            }, status=status.HTTP_404_NOT_FOUND)
+
+        # If already successfully paid
+        if payment.status == 'SUCCESS':
+            return Response({
+                "status": "success",
+                "message": "Payment already verified",
+                "data": {
+                    "payment_id": payment.id,
+                    "django_order_id": order.id,
+                    "razorpay_order_id": payment.razorpay_order_id,
+                    "razorpay_payment_id": payment.razorpay_payment_id,
+                    "status": payment.status
+                }
+            }, status=status.HTTP_200_OK)
+
+        # Razorpay client
+        client = razorpay.Client(
+            auth=(
+                settings.RAZORPAY_KEY_ID,
+                settings.RAZORPAY_KEY_SECRET
+            )
+        )
+
+        # Verify Razorpay signature
+        client.utility.verify_payment_signature({
+            'razorpay_order_id': payment.razorpay_order_id,
+            'razorpay_payment_id': razorpay_payment_id,
+            'razorpay_signature': razorpay_signature
+        })
+
+        # Payment verified successfully
+        payment.razorpay_payment_id = razorpay_payment_id
+        payment.razorpay_signature = razorpay_signature
+        payment.status = 'SUCCESS'
+        payment.save()
+
+        # Mark our Django order as placed
+        order.status = 'ORDER_PLACED'
+        order.save()
+
+        return Response({
+            "status": "success",
+            "message": "Payment verified successfully",
+            "data": {
+                "payment_id": payment.id,
+                "django_order_id": order.id,
+                "razorpay_order_id": payment.razorpay_order_id,
+                "razorpay_payment_id": payment.razorpay_payment_id,
+                "status": payment.status,
+                "order_status": order.status
+            }
+        }, status=status.HTTP_200_OK)
+
+    except razorpay.errors.SignatureVerificationError:
+        return Response({
+            "status": "failed",
+            "message": "Payment verification failed. Invalid Razorpay signature."
+        }, status=status.HTTP_400_BAD_REQUEST)
+
+    except Exception as e:
+        return Response({
+            "status": "failed",
+            "message": "Unable to verify Razorpay payment",
+            "error": str(e)
+        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)

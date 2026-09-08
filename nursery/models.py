@@ -133,6 +133,56 @@ class OrderItem(models.Model):
         order.total_amount = total
         order.save(update_fields=['total_amount'])   
 
+class Payment(models.Model):
+
+    PAYMENT_STATUS_CHOICES = (
+        ('CREATED', 'Created'),
+        ('SUCCESS', 'Success'),
+        ('FAILED', 'Failed'),
+    )
+
+    order = models.OneToOneField(
+        Order,
+        on_delete=models.CASCADE,
+        related_name='payment'
+    )
+
+    razorpay_order_id = models.CharField(
+        max_length=100,
+        unique=True
+    )
+
+    razorpay_payment_id = models.CharField(
+        max_length=100,
+        blank=True,
+        null=True
+    )
+
+    razorpay_signature = models.CharField(
+        max_length=255,
+        blank=True,
+        null=True
+    )
+
+    amount = models.FloatField(default=0)
+
+    status = models.CharField(
+        max_length=20,
+        choices=PAYMENT_STATUS_CHOICES,
+        default='CREATED'
+    )
+
+    created_at = models.DateTimeField(
+        auto_now_add=True
+    )
+
+    updated_at = models.DateTimeField(
+        auto_now=True
+    )
+
+    def __str__(self):
+        return f"Payment - Order {self.order.id}"
+
 
 class Pot(models.Model):
     name = models.CharField(max_length=100)

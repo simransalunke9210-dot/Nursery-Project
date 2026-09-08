@@ -117,6 +117,8 @@ urlpatterns = [
     path('api/settings/',views.SettingsView.as_view(),name='settings'),
     path('api/token/', TokenObtainPairView.as_view(), name='token_obtain_pair'),
     path('api/token/refresh/', TokenRefreshView.as_view(), name='token_refresh'),
+    path('payments/create-order/',views.create_razorpay_order,name='create_razorpay_order'),
+    path('payments/verify/',views.verify_razorpay_payment,name='verify_razorpay_payment'),
 
     path('swagger/',schema_view.with_ui('swagger', cache_timeout=0),name='schema-swagger-ui'),
     path('redoc/',schema_view.with_ui('redoc', cache_timeout=0),name='schema-redoc'),
