@@ -3,7 +3,7 @@ from django.urls import path,include
 from nursery import views
 from django.conf import settings
 from django.conf.urls.static import static
-from nursery.views import FertilizerListView, FertilizerAddView, FertilizerUpdateView, FertilizerDeleteView,AdminView, AdminDetailView
+from nursery.views import FertilizerListView, FertilizerAddView, FertilizerUpdateView, FertilizerDeleteView,AdminView, AdminDetailView,FertilizerDetailView
 from nursery.views import (
     add_plant,
     plant_list,
@@ -119,6 +119,13 @@ urlpatterns = [
     path('api/token/refresh/', TokenRefreshView.as_view(), name='token_refresh'),
     path('payments/create-order/',views.create_razorpay_order,name='create_razorpay_order'),
     path('payments/verify/',views.verify_razorpay_payment,name='verify_razorpay_payment'),
+    path('api/plant/getPlant/<int:id>/',views.get_plant_by_id,name='get_plant_by_id'),
+    path('api/pot/getPot/<int:id>/',views.get_pot_by_id,name='get_pot_by_id'),
+    path('api/customer/getCustomer/<int:id>/',views.get_customer_by_id,name='get_customer_by_id'),
+    path('api/order/getOrder/<int:id>/',views.get_order_by_id,name='get_order_by_id'),
+    path('api/orderitem/getOrderItem/<int:id>/',views.get_order_item_by_id,name='get_order_item_by_id'),
+    path('api/fertilizer/getFertilizer/<int:id>/',FertilizerDetailView.as_view(),name='get_fertilizer_by_id'),
+    path('api/users/getUser/<int:id>/',views.get_user_by_id,name='get_user_by_id'),
 
     path('swagger/',schema_view.with_ui('swagger', cache_timeout=0),name='schema-swagger-ui'),
     path('redoc/',schema_view.with_ui('redoc', cache_timeout=0),name='schema-redoc'),

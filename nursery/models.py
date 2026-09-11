@@ -1,6 +1,4 @@
 from django.db import models
-
-from django.db import models
 from django.contrib.auth.models import User
 
 class Plant(models.Model):
@@ -92,22 +90,47 @@ class Order(models.Model):
 
 
 class OrderItem(models.Model):
+
     order = models.ForeignKey(
         Order,
         on_delete=models.CASCADE,
         related_name='items'
     )
-    plant = models.ForeignKey(
-        Plant,
-        on_delete=models.CASCADE
+
+    product_type = models.CharField(
+        max_length=20,
+        choices=[
+            ('plant', 'Plant'),
+            ('pot', 'Pot'),
+            ('fertilizer', 'Fertilizer'),
+        ]
     )
-    quantity = models.PositiveIntegerField()
+
+    product_id = models.PositiveIntegerField()
+
+    quantity = models.PositiveIntegerField(default=1)
+
     price = models.FloatField(default=0)
 
     def save(self, *args, **kwargs):
-        # ALWAYS get price from database
-        self.price = float(self.plant.price) * self.quantity
 
+        # Get product from the correct table
+        if self.product_type == 'plant':
+            product = Plant.objects.get(id=self.product_id)
+
+        elif self.product_type == 'pot':
+            product = Pot.objects.get(id=self.product_id)
+
+        elif self.product_type == 'fertilizer':
+            product = Fertilizer.objects.get(id=self.product_id)
+
+        else:
+            raise ValueError("Invalid product type")
+
+        # Calculate price using the database product price
+        self.price = float(product.price) * self.quantity
+
+        # Save OrderItem
         super().save(*args, **kwargs)
 
         # Recalculate complete order total
@@ -120,18 +143,20 @@ class OrderItem(models.Model):
         self.order.save(update_fields=['total_amount'])
 
     def delete(self, *args, **kwargs):
+
         order = self.order
 
+        # Delete OrderItem
         super().delete(*args, **kwargs)
 
-        # Recalculate total after deleting item
+        # Recalculate order total
         total = sum(
             item.price
             for item in order.items.all()
         )
 
         order.total_amount = total
-        order.save(update_fields=['total_amount'])   
+        order.save(update_fields=['total_amount'])
 
 class Payment(models.Model):
 

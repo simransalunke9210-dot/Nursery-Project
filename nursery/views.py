@@ -105,6 +105,28 @@ def get_plants(request):
         "data": serializer.data
     })
 
+@swagger_auto_schema(
+    method='get',
+    tags=['plant']
+)
+@api_view(['GET'])
+@permission_classes([AllowAny])
+def get_plant_by_id(request, id):
+
+    plant = get_object_or_404(
+        Plant,
+        id=id
+    )
+
+    serializer = PlantSerializer(plant)
+
+    return Response({
+        "status": "success",
+        "code": 200,
+        "message": "Plant fetched successfully",
+        "data": serializer.data
+    })
+
 
 @swagger_auto_schema(
     method='post',
@@ -380,6 +402,30 @@ def get_pots(request):
         "data": serializer.data
     })
 
+@swagger_auto_schema(
+    method='get',
+    tags=['Pots']
+)
+@api_view(['GET'])
+@permission_classes([AllowAny])
+def get_pot_by_id(request, id):
+
+    pot = get_object_or_404(
+        Pot,
+        id=id
+    )
+
+    serializer = PotSerializer(
+        pot,
+        context={'request': request}
+    )
+
+    return Response({
+        "status": "success",
+        "code": 200,
+        "message": "Pot fetched successfully",
+        "data": serializer.data
+    })
 
 @swagger_auto_schema(
     method='post',
@@ -685,6 +731,27 @@ def get_customers(request):
     })
 
 @swagger_auto_schema(
+    method='get',
+    tags=['Customers']
+)
+@api_view(['GET'])
+def get_customer_by_id(request, id):
+
+    customer = get_object_or_404(
+        Customer,
+        id=id
+    )
+
+    serializer = CustomerSerializer(customer)
+
+    return Response({
+        "status": "success",
+        "code": 200,
+        "message": "Customer fetched successfully",
+        "data": serializer.data
+    })
+
+@swagger_auto_schema(
     method='post',
     tags=['Customers'],
     request_body=CustomerSerializer
@@ -780,6 +847,27 @@ def get_orders(request):
         "data": serializer.data
     })
 
+@swagger_auto_schema(
+    method='get',
+    tags=['Orders']
+)
+@api_view(['GET'])
+def get_order_by_id(request, id):
+
+    order = get_object_or_404(
+        Order,
+        id=id
+    )
+
+    serializer = OrderSerializer(order)
+
+    return Response({
+        "status": "success",
+        "code": 200,
+        "message": "Order fetched successfully",
+        "data": serializer.data
+    })
+
 
 @swagger_auto_schema(
     method='post',
@@ -793,17 +881,14 @@ def add_order_api(request):
     try:
         user = request.user
 
-        # ---------------------------------
-        # Find Customer using logged-in user
-        # ---------------------------------
+        # -------------------------------------------------
+        # 1. Find Customer using logged-in user's email
+        # -------------------------------------------------
         customer = Customer.objects.filter(
             email__iexact=user.email
         ).first()
 
-        # ---------------------------------
-        # If Customer does not exist,
-        # create Customer automatically
-        # ---------------------------------
+        # If Customer does not exist, create automatically
         if customer is None:
 
             mobile = ""
@@ -821,49 +906,130 @@ def add_order_api(request):
                 role="Customer"
             )
 
-        # ---------------------------------
-        # Prepare order data
-        # ---------------------------------
-        data = request.data.copy()
+        # -------------------------------------------------
+        # 2. Get logged-in user's cart
+        # -------------------------------------------------
+        cart = Cart.objects.filter(
+            user=user
+        ).first()
 
-        # Frontend should not control these
-        data.pop('customer', None)
-        data.pop('total_amount', None)
-        data.pop('date', None)
-        data.pop('status', None)
-        data.pop('expected_delivery', None)
-
-        # ---------------------------------
-        # Validate Order
-        # ---------------------------------
-        serializer = OrderSerializer(data=data)
-
-        if not serializer.is_valid():
+        if cart is None:
             return Response({
                 "status": "failed",
                 "code": 400,
-                "errors": serializer.errors
+                "message": "Cart not found"
             }, status=status.HTTP_400_BAD_REQUEST)
 
-        # ---------------------------------
-        # Create Order
-        # ---------------------------------
-        order = serializer.save(
-            customer=customer,
-            total_amount=0
+        # -------------------------------------------------
+        # 3. Get cart items
+        # -------------------------------------------------
+        cart_items = cart.items.all()
+
+        if not cart_items.exists():
+            return Response({
+                "status": "failed",
+                "code": 400,
+                "message": "Your cart is empty"
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+        # -------------------------------------------------
+        # 4. Get shipping address
+        # -------------------------------------------------
+        shipping_address = request.data.get(
+            'shipping_address'
         )
 
+        if not shipping_address:
+            return Response({
+                "status": "failed",
+                "code": 400,
+                "message": "Shipping address is required"
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+        # -------------------------------------------------
+        # 5. Create Order + OrderItems together
+        # -------------------------------------------------
+        with transaction.atomic():
+
+            order = Order.objects.create(
+                customer=customer,
+                total_amount=0,
+                shipping_address=shipping_address,
+                status="ORDER_PLACED"
+            )
+
+            # ---------------------------------------------
+            # 6. Convert CartItems → OrderItems
+            # ---------------------------------------------
+            for cart_item in cart_items:
+
+                if not cart_item.product_type:
+                    raise ValueError(
+                        "Cart item has no product type"
+                    )
+
+                if not cart_item.product_id:
+                    raise ValueError(
+                        "Cart item has no product ID"
+                    )
+
+                # Check that the product exists
+                if cart_item.product_type == 'plant':
+
+                    product = Plant.objects.filter(
+                        id=cart_item.product_id
+                    ).first()
+
+                elif cart_item.product_type == 'pot':
+
+                    product = Pot.objects.filter(
+                        id=cart_item.product_id
+                    ).first()
+
+                elif cart_item.product_type == 'fertilizer':
+
+                    product = Fertilizer.objects.filter(
+                        id=cart_item.product_id
+                    ).first()
+
+                else:
+                    raise ValueError(
+                        "Invalid product type"
+                    )
+
+                # Product doesn't exist
+                if product is None:
+                    raise ValueError(
+                        f"{cart_item.product_type} "
+                        f"with ID {cart_item.product_id} "
+                        f"does not exist"
+                    )
+
+                # Create OrderItem
+                OrderItem.objects.create(
+                    order=order,
+                    product_type=cart_item.product_type,
+                    product_id=cart_item.product_id,
+                    quantity=cart_item.quantity
+                )
+
+            # ---------------------------------------------
+            # 7. Clear cart after successful order
+            # ---------------------------------------------
+            cart_items.delete()
+
+        # -------------------------------------------------
+        # 8. Return complete order details
+        # -------------------------------------------------
         return Response({
             "status": "success",
             "code": 201,
-            "message": "Order added successfully",
+            "message": "Order placed successfully",
             "data": OrderSerializer(order).data
         }, status=status.HTTP_201_CREATED)
 
     except Exception as e:
 
-        # IMPORTANT: return actual error instead
-        # of generic HTML 500
         return Response({
             "status": "failed",
             "code": 500,
@@ -942,9 +1108,30 @@ def get_order_items(request):
     })
 
 @swagger_auto_schema(
+    method='get',
+    tags=['order_items']
+)
+@api_view(['GET'])
+def get_order_item_by_id(request, id):
+
+    order_item = get_object_or_404(
+        OrderItem,
+        id=id
+    )
+
+    serializer = OrderItemSerializer(order_item)
+
+    return Response({
+        "status": "success",
+        "code": 200,
+        "message": "Order item fetched successfully",
+        "data": serializer.data
+    })
+
+@swagger_auto_schema(
     method='post',
     request_body=OrderItemSerializer,
-    tags=['Order Items']
+    tags=['order Items']
 )
 @api_view(['POST'])
 def add_order_item_api(request):
@@ -1046,6 +1233,32 @@ class FertilizerListView(APIView):
             "status": "success",
             "code": 200,
             "message": "All fertilizers fetched",
+            "data": serializer.data
+        })
+
+class FertilizerDetailView(APIView):
+
+    permission_classes = [AllowAny]
+
+    @swagger_auto_schema(
+        tags=['fertilizer']
+    )
+    def get(self, request, id):
+
+        fertilizer = get_object_or_404(
+            Fertilizer,
+            id=id
+        )
+
+        serializer = FertilizerSerializer(
+            fertilizer,
+            context={'request': request}
+        )
+
+        return Response({
+            "status": "success",
+            "code": 200,
+            "message": "Fertilizer fetched successfully",
             "data": serializer.data
         })
 
@@ -1378,6 +1591,22 @@ class AdminDetailView(APIView):
     permission_classes = [IsAdminUser]
 
     @swagger_auto_schema(
+    tags=['admins']
+)
+    def get(self, request, id):
+
+        admin = get_object_or_404(Admin,id=id)
+
+        serializer = AdminSerializer(admin)
+
+        return Response({
+            "status": "success",
+            "code": 200,
+            "message": "Admin fetched successfully",
+            "data": serializer.data
+        })
+
+    @swagger_auto_schema(
         request_body=AdminSerializer,
         tags=['admins']
     )
@@ -1654,6 +1883,27 @@ def delete_user(request, id):
     return Response({
         "status": "success",
         "message": "User deleted successfully"
+    })
+
+@swagger_auto_schema(
+    method='get',
+    tags=['users']
+)
+@api_view(['GET'])
+def get_user_by_id(request, id):
+
+    user = get_object_or_404(
+        User,
+        id=id
+    )
+
+    serializer = UserSerializer(user)
+
+    return Response({
+        "status": "success",
+        "code": 200,
+        "message": "User fetched successfully",
+        "data": serializer.data
     })
 
 
